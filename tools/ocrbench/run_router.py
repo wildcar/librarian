@@ -95,6 +95,7 @@ async def run(args) -> None:
                     })
                     if res.is_error:
                         print(model, pid, "ERROR", res.content[0].text[:300], flush=True)
+                        await asyncio.sleep(args.pause)
                         continue
                     p = payload(res)
                     (out / f"{pid}.txt").write_text(p.get("text") or "", encoding="utf-8")
@@ -103,6 +104,8 @@ async def run(args) -> None:
                     print(model, pid, timings[pid], costs[pid], flush=True)
                     tf.write_text(json.dumps(timings, indent=1))
                     cf.write_text(json.dumps(costs, indent=1))
+                    if args.pause:
+                        await asyncio.sleep(args.pause)
 
 
 def main() -> None:
@@ -111,6 +114,7 @@ def main() -> None:
     ap.add_argument("--models", default="")
     ap.add_argument("--only", default="")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--pause", type=float, default=0, help="seconds between pages (rate limits)")
     args = ap.parse_args()
     load_env()
     asyncio.run(run(args))

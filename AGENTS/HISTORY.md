@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-19 · OCR round 2: 12 newer OpenRouter models
+- What: owner adopted 12 models into the router registry; ran them on the 14 eval pages. Gemini 4 Argon 99% (handwriting 94%) at $0.0097/page.
+- Why: owner asked to look for better OCR models on OpenRouter.
+- Files: tools/ocrbench/run_router.py (--pause), AGENTS/STATE.md, AGENTS/MEMORY.md; report in library/_эксперименты/ocr-2026-10/
+- Next: owner decides whether Gemini 4 Argon replaces Gemini 3.1 Flash Lite as the primary reader (ADR-0002).
+
 ## 2026-10-18 · ADR-0002 accepted
 - What: owner allowed sending all scanned pages, medical included, to vision models through the router; ADR-0002 → Accepted.
 - Why: the privacy question was the only thing holding the OCR decision.

@@ -23,5 +23,7 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - model-router-mcp (Python, separate repo) is the only way to reach AI models; it logs cost by `external_user_id`, so the librarian passes the family member's id there.
 - Sample set: 32 scanned medical PDFs from a Brother scanner, 1–15 pages, no text layer at all; part named `Scan_20190101_…` because the scanner clock was reset. Paths: `AGENTS/ENV.md`.
 - OCR bake-off 2026-10-18 (ADR-0002): on print all good engines reach 96–99%; handwriting separates them (Gemini Flash Lite 74%, tesseract 9%). Vision models invent plausible wrong surnames from handwriting; tesseract fails visibly.
+- OCR round 2 (2026-10-19): Gemini 4 Argon best (99%, handwriting 94%). Claude Haiku 5.5 scores 96% but invented a malignant diagnosis on a handwritten note — aggregate scores hide dangerous hallucinations. DeepSeek v4.1 Flash loops to the 131k output limit; Mistral Small 4 hits provider 429 even with 20 s pauses.
+- New router models stay unconfirmed until their first successful request; a registry prune removes unconfirmed rows (owner, 2026-10-19).
 - Router provider `codex-oauth` was disabled on 2026-10-18; OpenAI models were reached through OpenRouter instead.
 - Router tools useful here: `chat` (text and images), `decide` (typed yes/no, choice, score questions with probabilities), `local/uvdoc` (unwarps photographed pages).

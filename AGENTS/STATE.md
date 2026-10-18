@@ -14,9 +14,11 @@ and models (via model-router-mcp), file them into a shared structure.
 - OCR bake-off done on 14 sample pages (`tools/ocrbench/`, ADR-0002 Accepted): Gemini 3.1 Flash Lite via router 93% at $0.0013/page, tesseract 78% (9% on handwriting).
 - Report, reference facts and all engine outputs: `library/_эксперименты/ocr-2026-10/` (outside the repo, personal data).
 - Tesseract text of all 156 sample pages is cached there for the splitting experiment.
+- Round 2 (2026-10-19, 12 newer models): Gemini 4 Argon 99%, handwriting 94%, $0.0097/page — candidate to replace Flash Lite as primary.
 
 ## Next
 
+- Owner decision: switch the primary OCR model to `google/gemini-4-argon` (update ADR-0002)?
 - Splitting experiment: find document boundaries in multi-page scans (rules on tesseract text plus router `decide`).
 - First pipeline slice in Go: walk a folder → sha256 + MIME → catalog → dedup report.
 - People registry draft (code, aliases, birth date) — needed to resolve handwritten names.
