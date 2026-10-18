@@ -1,6 +1,6 @@
 # ADR-0002: OCR engine — vision model through the router, tesseract as a second reading
 
-**Status:** Proposed (privacy choice pending, see Consequences)
+**Status:** Accepted (2026-10-18)
 **Date:** 2026-10-18
 **Deciders:** wildcar
 **Scope:** extraction stage; `tools/ocrbench/`
@@ -53,10 +53,10 @@ Findings that shape the decision:
 ## Consequences
 
 - About $0.0013 per page; the sample folder costs about $0.20 to read in full.
-- Page images leave the machine: OpenRouter forwards them to the model vendor. For
-  medical documents this needs the owner's explicit consent. Open alternatives: send
-  only pages tesseract could not read, or keep medical sources local (surya on a GPU
-  server). Until the owner chooses, this ADR stays Proposed.
+- Page images leave the machine: OpenRouter forwards them to the model vendor. The
+  owner decided on 2026-10-18 that all pages, medical ones included, go through the
+  router. Rejected for now: sending only pages tesseract could not read, or keeping
+  medical sources local (surya on a GPU server).
 - Tesseract and its `rus` model become a runtime dependency (see `AGENTS/ENV.md`).
 - The bake-off is repeatable: new engines or models are added as another
   `run_*.py` and scored against the same reference.

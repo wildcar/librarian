@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-18 · ADR-0002 accepted
+- What: owner allowed sending all scanned pages, medical included, to vision models through the router; ADR-0002 → Accepted.
+- Why: the privacy question was the only thing holding the OCR decision.
+- Files: docs/adr/0002-ocr-engine.md, AGENTS/SPEC.md, AGENTS/STATE.md, AGENTS/MEMORY.md
+- Next: splitting experiment on the sample scans.
+
 ## 2026-10-18 · OCR bake-off
 - What: tools/ocrbench (render, tesseract, paddle, surya, router models, fact scorer); ADR-0002 proposed: router vision model + tesseract cross-check.
 - Why: all 156 sample pages are image-only; OCR quality decides everything downstream.

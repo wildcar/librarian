@@ -15,6 +15,7 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - Extraction/OCR quality comes first; Python utilities are acceptable when Go or external tools fall short (user, 2026-10-18). Why: the archive is useless if the text is wrong.
 - Cloud sources are only read, never written; locally the archive keeps text copies and summaries (user, 2026-10-18).
 - Access control is not needed now, only a hook for it: one human librarian keeps everyone's documents (user, 2026-10-18).
+- All scanned pages, medical ones included, may be sent to vision models through the router (user, 2026-10-18). Why: reading quality on handwriting matters more than keeping scans local; recorded in ADR-0002.
 - Router calls carry `external_user_id="librarian"` (user, 2026-10-18). Why: the librarian's spend shows separately in the router console and `get_usage`; the field does not affect access.
 
 ## Project facts

@@ -43,7 +43,7 @@ Analysis combines two kinds of functions:
 - Go (see `docs/adr/0001-go-as-core-language.md`).
 - MCP client to model-router-mcp: `github.com/modelcontextprotocol/go-sdk`.
 - Catalog: SQLite (`modernc.org/sqlite`, pure Go).
-- OCR: vision model through the router (primary) plus local tesseract as a second reading (ADR-0002, Proposed).
+- OCR: vision model through the router (primary) plus local tesseract as a second reading (ADR-0002).
 - Bake-off harness for extractors: `tools/ocrbench/` (Python).
 
 ## Architecture (sketch)
