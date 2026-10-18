@@ -15,15 +15,17 @@ and models (via model-router-mcp), file them into a shared structure.
 - Report, reference facts and all engine outputs: `library/_эксперименты/ocr-2026-10/` (outside the repo, personal data).
 - Tesseract text of all 156 sample pages is cached there for the splitting experiment.
 - Round 2 (2026-10-19, 12 newer models): Gemini 4 Argon 99%, handwriting 94%, $0.0097/page — now the primary OCR model (ADR-0002).
+- Splitting experiment done (`tools/ocrbench/split.py`, ADR-0003 Proposed): Argon over the whole file 100%/100% on 27 files, rules 94%/94%, decide weak. Report and proposed split of the folder: `library/_эксперименты/split-2026-10/`.
 
 ## Next
 
-- Splitting experiment: find document boundaries in multi-page scans (rules on tesseract text plus router `decide`).
+- Owner: review `РАЗБИВКА.md` (68 documents) and decide on ADR-0003.
 - First pipeline slice in Go: walk a folder → sha256 + MIME → catalog → dedup report.
 - People registry draft (code, aliases, birth date) — needed to resolve handwritten names.
 
 ## Open questions
 
+- Non-contiguous documents and shuffled pages inside one scan: how to represent and fix them.
 - Taxonomy: domain and leaf names — start from the sample folders?
 - Person codes: three initials always? Namesakes and household documents (`Семья`)?
 - PDF copies for cloud sources: `none` by default, or cut and keep locally too?

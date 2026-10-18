@@ -100,7 +100,7 @@ async def run(args) -> None:
                     p = payload(res)
                     (out / f"{pid}.txt").write_text(p.get("text") or "", encoding="utf-8")
                     timings[pid] = round(time.perf_counter() - t0, 2)
-                    costs[pid] = p.get("cost") or p.get("cost_usd") or p.get("usage", {}).get("cost")
+                    costs[pid] = p.get("cost_usd") or p.get("cost") or p.get("usage", {}).get("cost")
                     print(model, pid, timings[pid], costs[pid], flush=True)
                     tf.write_text(json.dumps(timings, indent=1))
                     cf.write_text(json.dumps(costs, indent=1))

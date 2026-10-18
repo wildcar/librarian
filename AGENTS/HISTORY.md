@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-19 · Splitting experiment
+- What: tools/ocrbench/split.py (rules, decide, hybrid, whole-file chat); hand labels for 124 boundaries; ADR-0003 proposed; filing.md splitting section rewritten.
+- Why: scans hold several documents; needed a measured way to cut them.
+- Files: tools/ocrbench/split.py, docs/adr/0003-splitting-scans-into-documents.md, docs/filing.md, AGENTS/*
+- Next: owner reviews the proposed split; then the first Go pipeline slice.
+
 ## 2026-10-19 · Gemini 4 Argon is the primary OCR model
 - What: ADR-0002 updated: primary reader `google/gemini-4-argon` pinned by model_id; round-2 data added; alternatives revised.
 - Why: owner chose quality on handwriting (94% vs 74%) over 7× lower cost.

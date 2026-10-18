@@ -92,14 +92,21 @@ SQLite inside a folder that a sync client rewrites risks corruption and conflict
 
 ## Splitting
 
-A scanned PDF often holds several documents back to back (the sample set has scans of
-6–15 pages). The librarian splits by page ranges:
+A scanned PDF often holds several documents back to back (in the sample folder 32
+PDFs hold 68 documents). The librarian splits by page ranges (ADR-0003):
 
-1. OCR every page.
-2. Algorithmic hints: blank pages, «стр. 1 из 3» patterns, a repeated header or form
-   number, a change of date or organisation.
-3. A model call per page boundary: «does page N+1 start a new document?» (router
-   `decide`, yes/no with probability). Low confidence goes to `Входящие/`.
+1. OCR every page (ADR-0002).
+2. One model call per file over the text of all pages returns the first page of each
+   document.
+3. Text rules check it independently: a handwritten date on top of a page, running
+   page numbers, a repeated letterhead, the same case or contract number, a page
+   that starts mid-table, printouts placed before their protocol. A strong rule that
+   disagrees with the model sends the file to `Входящие/`.
+4. Printouts (ultrasound frames, ECG tapes), specimen sticker sheets and patient
+   diaries belong to the protocol of the same examination.
+
+Not covered yet: documents whose pages are not contiguous in the scan, and shuffled
+page order.
 
 ## Virtual collections
 

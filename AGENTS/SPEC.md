@@ -67,7 +67,8 @@ sources ──→ ingest ──→ fingerprint ──→ extract ──→ class
 3. ⏳ Fingerprint and deduplicate files by content; one original, many `source_uri`.
 4. ⏳ Extract text and metadata algorithmically; OCR when there is no text layer: a vision model via the router plus tesseract, disagreement on print flags the page (ADR-0002).
 4a. ⏳ Names and dates read from handwriting are resolved against the people registry and date rules, never stored as read.
-5. ⏳ Split multi-document scans into logical documents by page ranges.
+5. ⏳ Split multi-document scans into logical documents by page ranges: a whole-file model call plus text rules as a cross-check (ADR-0003, Proposed).
+5a. ⏳ Reassemble documents whose pages are not contiguous and restore page order.
 6. ⏳ Classify documents: rules first, models through the router as fallback.
 7. ⏳ File into the archive tree with standard names `YYYY-MM-DD <PERSON> <Title>.<ext>` (`docs/filing.md`).
 8. ⏳ Virtual collections: saved catalog queries materialised as `Коллекции/<name>.md`.
@@ -80,7 +81,7 @@ cmd/librarian/   CLI entrypoint
 docs/filing.md   archive layout, naming, sidecar format
 internal/        application packages (added as the pipeline appears)
 docs/adr/        architecture decisions
-tools/ocrbench/  OCR bake-off: render pages, run engines, score against key facts
+tools/ocrbench/  OCR bake-off and splitting experiment: render pages, run engines, score against hand labels
 AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
 ```
 
