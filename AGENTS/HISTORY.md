@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-19 · Gemini 4 Argon is the primary OCR model
+- What: ADR-0002 updated: primary reader `google/gemini-4-argon` pinned by model_id; round-2 data added; alternatives revised.
+- Why: owner chose quality on handwriting (94% vs 74%) over 7× lower cost.
+- Files: docs/adr/0002-ocr-engine.md, AGENTS/SPEC.md, AGENTS/STATE.md, AGENTS/MEMORY.md
+- Next: splitting experiment on the sample scans.
+
 ## 2026-10-19 · OCR round 2: 12 newer OpenRouter models
 - What: owner adopted 12 models into the router registry; ran them on the 14 eval pages. Gemini 4 Argon 99% (handwriting 94%) at $0.0097/page.
 - Why: owner asked to look for better OCR models on OpenRouter.
