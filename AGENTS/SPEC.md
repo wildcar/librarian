@@ -43,7 +43,8 @@ Analysis combines two kinds of functions:
 - Go (see `docs/adr/0001-go-as-core-language.md`).
 - MCP client to model-router-mcp: `github.com/modelcontextprotocol/go-sdk`.
 - Catalog: SQLite (`modernc.org/sqlite`, pure Go).
-- Extractors and OCR: chosen by a bake-off on real samples (planned ADR-0002).
+- OCR: vision model through the router (primary) plus local tesseract as a second reading (ADR-0002, Proposed).
+- Bake-off harness for extractors: `tools/ocrbench/` (Python).
 
 ## Architecture (sketch)
 
@@ -64,7 +65,8 @@ sources ──→ ingest ──→ fingerprint ──→ extract ──→ class
 1. ⏳ Accept local files and folders as input; slow synced folders are read once into a local cache by hash.
 2. ⏳ Accept shared-folder links, read-only: Yandex Disk, Google Drive, Nextcloud.
 3. ⏳ Fingerprint and deduplicate files by content; one original, many `source_uri`.
-4. ⏳ Extract text and metadata algorithmically; OCR when there is no text layer.
+4. ⏳ Extract text and metadata algorithmically; OCR when there is no text layer: a vision model via the router plus tesseract, disagreement on print flags the page (ADR-0002).
+4a. ⏳ Names and dates read from handwriting are resolved against the people registry and date rules, never stored as read.
 5. ⏳ Split multi-document scans into logical documents by page ranges.
 6. ⏳ Classify documents: rules first, models through the router as fallback.
 7. ⏳ File into the archive tree with standard names `YYYY-MM-DD <PERSON> <Title>.<ext>` (`docs/filing.md`).
@@ -78,6 +80,7 @@ cmd/librarian/   CLI entrypoint
 docs/filing.md   archive layout, naming, sidecar format
 internal/        application packages (added as the pipeline appears)
 docs/adr/        architecture decisions
+tools/ocrbench/  OCR bake-off: render pages, run engines, score against key facts
 AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
 ```
 
@@ -96,6 +99,6 @@ See `AGENTS/STATE.md` for the live Now / Next snapshot.
 
 ## Data sources & dependencies
 
-- model-router-mcp: `/mcp` over Streamable HTTP, Bearer auth; every call carries
-  `external_user_id` (the family member) and app identity.
+- model-router-mcp: `https://mr.wildcar.org/mcp/` over Streamable HTTP, Bearer auth; every call carries
+  `external_user_id="librarian"` (groups the librarian's spend in router stats) and `app_name="librarian"`.
 - Cloud sources: Yandex Disk, Google Drive, Nextcloud — shared-folder links, read-only.

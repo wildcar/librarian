@@ -23,3 +23,7 @@ Thumbs.db
 *.db-journal
 *.db-wal
 *.db-shm
+
+# Python virtualenvs (tools/)
+.venv*/
+__pycache__/
