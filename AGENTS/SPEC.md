@@ -3,8 +3,7 @@
 Source of truth for *what the product does* and *how it is built*. Keep it in sync
 with reality (update before code when the contract changes).
 
-Status: **draft**. The filing model («подшивка») is not specified yet — see
-Open questions in `AGENTS/STATE.md`.
+Status: **draft**. Filing layout and naming: `docs/filing.md`.
 
 ## Purpose
 
@@ -32,13 +31,19 @@ Analysis combines two kinds of functions:
    answer with enough confidence. Model cost is tracked per family member.
 4. Processing is idempotent and resumable: a file already analysed (same
    content hash, same pipeline version) is not analysed again.
+5. Sources are read-only. The archive (a local tree, possibly cloud-synced by the
+   user) holds derived artefacts: a Markdown sidecar per logical document and,
+   per source policy, a PDF cut of it. The archive can rebuild the catalog.
+6. Extraction quality beats language purity: an extractor is chosen by measured
+   results on real samples, whether it is a Go library, an external tool, a
+   Python sidecar or a model through the router.
 
 ## Stack
 
-- Go (see `docs/adr/0001-go-as-core-language.md`, Proposed).
+- Go (see `docs/adr/0001-go-as-core-language.md`).
 - MCP client to model-router-mcp: `github.com/modelcontextprotocol/go-sdk`.
 - Catalog: SQLite (`modernc.org/sqlite`, pure Go).
-- External extractors: poppler, tesseract, exiftool, LibreOffice headless (planned).
+- Extractors and OCR: chosen by a bake-off on real samples (planned ADR-0002).
 
 ## Architecture (sketch)
 
@@ -56,18 +61,21 @@ sources ──→ ingest ──→ fingerprint ──→ extract ──→ class
 
 ## Functional requirements
 
-1. ⏳ Accept local files and folders as input.
-2. ⏳ Accept links to files/folders in cloud storage (providers: open question).
-3. ⏳ Fingerprint and deduplicate files by content.
+1. ⏳ Accept local files and folders as input; slow synced folders are read once into a local cache by hash.
+2. ⏳ Accept shared-folder links, read-only: Yandex Disk, Google Drive, Nextcloud.
+3. ⏳ Fingerprint and deduplicate files by content; one original, many `source_uri`.
 4. ⏳ Extract text and metadata algorithmically; OCR when there is no text layer.
-5. ⏳ Classify documents: rules first, models through the router as fallback.
-6. ⏳ File documents into the archive structure («подшивка») — to be specified.
-7. ⏳ Several people (a family): owners, shared and personal documents, per-person model cost.
+5. ⏳ Split multi-document scans into logical documents by page ranges.
+6. ⏳ Classify documents: rules first, models through the router as fallback.
+7. ⏳ File into the archive tree with standard names `YYYY-MM-DD <PERSON> <Title>.<ext>` (`docs/filing.md`).
+8. ⏳ Virtual collections: saved catalog queries materialised as `Коллекции/<name>.md`.
+9. ⏳ People registry (code, name, aliases, birth date); document owner and a reserved `visibility` field. Access is not enforced yet.
 
 ## Project structure
 
 ```
 cmd/librarian/   CLI entrypoint
+docs/filing.md   archive layout, naming, sidecar format
 internal/        application packages (added as the pipeline appears)
 docs/adr/        architecture decisions
 AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
@@ -75,7 +83,9 @@ AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
 
 ## Deployment
 
-- Not decided. Today: a local CLI binary (`go build ./cmd/librarian`).
+- Not decided: the dev machine or an Ubuntu server on the LAN reachable from the internet.
+  Today: a local CLI binary (`go build ./cmd/librarian`).
+- Archive: a local folder; the catalog database lives outside it (sync clients and SQLite do not mix).
 
 ## Current state
 
@@ -88,4 +98,4 @@ See `AGENTS/STATE.md` for the live Now / Next snapshot.
 
 - model-router-mcp: `/mcp` over Streamable HTTP, Bearer auth; every call carries
   `external_user_id` (the family member) and app identity.
-- Cloud storage providers: to be chosen.
+- Cloud sources: Yandex Disk, Google Drive, Nextcloud — shared-folder links, read-only.

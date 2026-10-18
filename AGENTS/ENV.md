@@ -6,13 +6,15 @@ Update whenever a new tool, credential, or host-specific quirk is learned.
 ## Host
 
 - **Dev**: Windows 10, PowerShell 7 + Git Bash, repo at `C:\Users\sergey_e\D\repo\librarian`.
-- **Prod**: not decided.
+- **Prod**: not decided. Candidate: Ubuntu server on the LAN, reachable from the internet.
+- Archive for experiments: `C:\Users\sergey_e\D\personal\library\` (empty as of 2026-10-18).
+- Sample source (read only, Nextcloud-synced, can be slow): `C:\Users\sergey_e\D\personal\nextcloud\document\Сережа\Папа\Сканы заключений\`.
 
 ## Tools
 
 - Go 1.27 (module declares `go 1.24` as the floor).
 - git 2.53. `gh` CLI is not installed on dev.
-- Planned external extractors (not required yet): poppler (`pdftotext`), tesseract, exiftool, LibreOffice.
+- `pdftotext` is available from Git for Windows (`/mingw64/bin`). Not installed: tesseract, exiftool, qpdf, ImageMagick, pdfinfo. Python 3.14 without pypdf/pymupdf.
 - model-router-mcp: MCP over Streamable HTTP at `<router>/mcp`, Bearer token. Repo: https://github.com/wildcar/model-router-mcp
 
 ## Credentials & secrets

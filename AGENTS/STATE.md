@@ -11,21 +11,21 @@ and models (via model-router-mcp), file them into a shared structure.
 
 ## Now
 
-- Repository initialised: draft SPEC, ADR-0001 (Go, Proposed), Go module with a CLI stub.
+- Filing design drafted: `docs/filing.md` (sources read-only, local tree of sidecars and PDF cuts, naming, splitting, virtual collections, people registry).
+- ADR-0001 accepted: Go core, extractors chosen by measured quality.
 
 ## Next
 
-- Confirm the language choice (ADR-0001 → Accepted).
-- Specify «подшивка»: what the target archive structure looks like.
-- First pipeline slice: walk a local folder → sha256 + MIME → SQLite catalog → dedup report.
+- OCR bake-off on the 32 sample scans (none has a text layer): tesseract rus, vision models via router, a Python OCR (surya / PaddleOCR) as a candidate. Output: ADR-0002.
+- First pipeline slice: walk a folder → sha256 + MIME → catalog → dedup report.
 
 ## Open questions
 
-- «Подшивка»: folder taxonomy, virtual collections over a catalog, or both? Who decides the taxonomy?
-- Cloud providers: Yandex Disk, Google Drive, OneDrive, S3, others? Read-only or write back?
-- Where does the archive live: local disk, NAS, cloud? Where does the librarian run?
-- Family model: accounts, shared vs personal documents, access rules.
-- Interface: CLI only, or a web UI / Telegram bot later?
+- Taxonomy: domain and leaf names (`Медицина/Приемы-назначения`, ...) — start from the sample folders?
+- Person codes: three initials always? Namesakes and household documents (`Семья`)?
+- PDF copies for cloud sources: `none` by default, or cut and keep locally too?
+- Where the librarian runs: dev machine or the Ubuntu server.
+- Interface: CLI only, or web UI / Telegram bot later.
 
 ## Deferred
 

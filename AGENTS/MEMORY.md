@@ -12,9 +12,12 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 
 ## Working agreements (feedback)
 
-- —
+- Extraction/OCR quality comes first; Python utilities are acceptable when Go or external tools fall short (user, 2026-10-18). Why: the archive is useless if the text is wrong.
+- Cloud sources are only read, never written; locally the archive keeps text copies and summaries (user, 2026-10-18).
+- Access control is not needed now, only a hook for it: one human librarian keeps everyone's documents (user, 2026-10-18).
 
 ## Project facts
 
 - model-router-mcp (Python, separate repo) is the only way to reach AI models; it logs cost by `external_user_id`, so the librarian passes the family member's id there.
+- Sample set: 32 scanned medical PDFs from a Brother scanner, 1–15 pages, no text layer at all; part named `Scan_20190101_…` because the scanner clock was reset. Paths: `AGENTS/ENV.md`.
 - Router tools useful here: `chat` (text and images), `decide` (typed yes/no, choice, score questions with probabilities), `local/uvdoc` (unwarps photographed pages).

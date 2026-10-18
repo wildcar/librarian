@@ -28,6 +28,7 @@ librarian — a pedantic librarian that ingests local and cloud documents, analy
 | `AGENTS/ENV.md` | Host, tools, credentials, command cheat-sheet. Read on demand. |
 | `README.md` | Public-facing readme: what the project is, how to run it locally. |
 | `docs/` | Domain / reference docs. Read on demand when a task touches that area. |
+| `docs/filing.md` | Archive layout, file naming, sidecar format, splitting, collections. |
 | `docs/adr/` | Architecture Decision Records — one file per significant decision (see `docs/adr/TEMPLATE.md`). |
 
 ## Startup Checklist
@@ -154,7 +155,7 @@ Hard constraints and invariants this project must not violate. Keep each rule on
 
 ## Stack & Commands
 
-Go (ADR-0001, Proposed), SQLite catalog, MCP client to model-router-mcp. Full cheat-sheet: `AGENTS/ENV.md`.
+Go (ADR-0001), SQLite catalog, MCP client to model-router-mcp. Full cheat-sheet: `AGENTS/ENV.md`.
 
 ```bash
 go mod download                    # install

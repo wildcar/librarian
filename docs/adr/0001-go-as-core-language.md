@@ -1,6 +1,6 @@
 # ADR-0001: Go as the core language
 
-**Status:** Proposed
+**Status:** Accepted (2026-10-18)
 **Date:** 2026-10-18
 **Deciders:** wildcar
 **Scope:** whole repository
@@ -35,6 +35,11 @@ Write the core in Go.
   headless for Office formats), or the router itself (`image-to-text` for OCR of
   hard scans, `local/uvdoc` for page unwarping). A Go-native extractor replaces
   a tool only where it is clearly as good.
+
+Extraction quality is not traded for language purity. The sample set (32 medical
+scans) is 100% image-only PDFs, so OCR quality decides the outcome. Extractors are
+chosen by a bake-off on real samples (planned ADR-0002); a Python sidecar is
+acceptable where it wins.
 
 ## Consequences
 
