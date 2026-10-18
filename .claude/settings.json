@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(mkdir:*)",
+      "Bash(pwd:*)",
+      "Bash(echo:*)",
+      "Bash(git:*)",
+      "Bash(cd:*)",
+      "Bash(diff:*)",
+      "Bash(*psql.exe*)",
+      "Bash(powershell.exe:*)",
+      "Bash(powershell:*)",
+      "WebSearch",
+      "WebFetch(domain:*)",
+      "PowerShell(npm *)",
+      "Bash(npm config *)",
+      "Bash(npm install *)",
+      "Bash(npm ls *)",
+      "Bash(npm view *)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(npm audit *)",
+      "Bash(npx next *)",
+      "Bash(npm config get *)",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(go test *)",
+      "Bash(go run *)",
+      "Bash(go mod *)",
+      "Bash(gofmt *)",
+      "PowerShell(go *)"
+    ]
+  }
+}

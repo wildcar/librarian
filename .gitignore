@@ -1,0 +1,25 @@
+# Local agent / IDE state — do not commit.
+# Exceptions: shared team settings and project skills travel with the repo.
+# Personal overrides stay in .claude/settings.local.json (ignored).
+.claude/*
+!.claude/settings.json
+!.claude/skills/
+
+# Environment / secrets
+.env
+.env.local
+.env*.local
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# Add project-specific ignores below (build output, dependencies, caches, ...)
+/bin/
+/dist/
+*.exe
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
