@@ -93,6 +93,22 @@ var schema = []string{
 		pipeline      INTEGER NOT NULL,
 		updated       TEXT NOT NULL
 	);`,
+	// 6: text layers per document (ADR-0005).
+	`CREATE TABLE texts (
+		doc_id              TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+		status              TEXT NOT NULL,   -- done | flagged | error
+		essential           TEXT,
+		summary             TEXT,            -- de-identified
+		removed             TEXT,            -- JSON: lines the essential text left out
+		restored_repeats    INTEGER NOT NULL DEFAULT 0,
+		restored_suspicious INTEGER NOT NULL DEFAULT 0,
+		flags               TEXT,            -- failed summary checks after the retry
+		error               TEXT,
+		model               TEXT NOT NULL,
+		cost_usd            REAL NOT NULL DEFAULT 0,
+		pipeline            INTEGER NOT NULL,
+		updated             TEXT NOT NULL
+	);`,
 }
 
 // Catalog is an open account catalog.

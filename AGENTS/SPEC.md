@@ -97,8 +97,8 @@ Analysis
 9. ⏳ Resolve persons named in a document against the account's persons (aliases, birth date); names read from handwriting are never stored as read.
 10. ⏳ Classify documents: rules first, models through the router as fallback.
 11. ⏳ Anything below confidence thresholds goes to the account's inbox for the owner's decision.
-11a. ⏳ Essential text: the verbatim text minus insignificant parts (form notes, ads, contacts, repeated letterheads, barcodes, empty fields), by removal only, checked against the verbatim text (ADR-0005).
-11b. ⏳ De-identified summary of every document: no names of patient, doctor or clinic, no identifying numbers; checked by rules (ADR-0005).
+11a. ✅ Essential text (`librarian digest`, `internal/layers`): the verbatim text minus insignificant parts (form notes, ads, contacts, repeated letterheads, barcodes, empty fields), by removal only, checked against the verbatim text (ADR-0005).
+11b. ✅ De-identified summary of every document (`librarian digest`; one regeneration on a failed check, then flagged; `librarian show`): no names of patient, doctor or clinic, no identifying numbers; checked by rules (ADR-0005).
 
 Output
 
@@ -123,7 +123,7 @@ AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
   owner's Ubuntu server on the LAN. Development runs on the Windows dev machine.
 - Storage: one directory per account (catalog, file cache, archive tree). The catalog
   database is never inside a folder that a sync client rewrites.
-- Today: a CLI (`librarian account create | ingest | dupes | stats | extract | verify | split | docs | text`); data root from `--home` or `LIBRARIAN_HOME`; `extract` needs `ROUTER_URL`, `ROUTER_TOKEN` and poppler (`LIBRARIAN_POPPLER_DIR` when it is not on PATH).
+- Today: a CLI (`librarian account create | ingest | dupes | stats | extract | verify | split | docs | digest | show | text`); data root from `--home` or `LIBRARIAN_HOME`; `extract` needs `ROUTER_URL`, `ROUTER_TOKEN` and poppler (`LIBRARIAN_POPPLER_DIR` when it is not on PATH).
 
 ## Current state
 
@@ -132,6 +132,7 @@ AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
 - ✅ First Go slice: account storage, per-account SQLite catalog, folder intake, duplicate and stats reports.
 - ✅ Second Go slice: verbatim page text through the text layer or OCR via the router, stored per page in the account catalog; tesseract second reading with flags.
 - ✅ Third Go slice: splitting originals into documents, documents table in the catalog.
+- ✅ Fourth Go slice: essential text and de-identified summary per document with checks.
 - ⏳ Everything in Functional requirements.
 
 See `AGENTS/STATE.md` for the live Now / Next snapshot.

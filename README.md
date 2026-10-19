@@ -28,6 +28,8 @@ go run ./cmd/librarian text    --account family <sha256 prefix>
 go run ./cmd/librarian verify  --account family   # tesseract second reading for older pages
 go run ./cmd/librarian split   --account family   # cut originals into documents
 go run ./cmd/librarian docs    --account family
+go run ./cmd/librarian digest  --account family   # essential text + de-identified summary
+go run ./cmd/librarian show    --account family <document id> [--layer essential]
 ```
 
 ## Docs

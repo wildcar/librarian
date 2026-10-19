@@ -37,6 +37,8 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - Gemini 4 Argon sometimes corrects typos of the original despite the prompt (seen once in 156 pages, 2026-10-20); the tesseract check surfaces such cases as missing words.
 - Second-reading thresholds were set on the sample (min real share 0.92, max missing run 1); revisit them on the first batch from another clinic.
 - Without the owner's handwritten dates, "same letterhead" and "same contract number" are wrong as strong split signals (2026-10-20): one clinic's form or contract carries many separate documents. Recalibrate rules with `TestCalibrateRules` on new batches.
+- GPT-6 Luna summaries sometimes compute new numbers (two 14-day courses → «28 дней»); the number check flags them, which is intended (2026-10-20).
+- Date parsing for checks must handle: abbreviated/upper-case months, Roman months with Cyrillic Х, month-first «ДЕК 4, 2019», no swallowing on rejected candidates, sizes «5 × 9,12», times before dates (tests in internal/layers).
 - Router `decide` replies carry cost in `cost_usd` (not `cost`).
 - Router provider `codex-oauth` was disabled on 2026-10-18; OpenAI models were reached through OpenRouter instead.
 - Router tools useful here: `chat` (text and images), `decide` (typed yes/no, choice, score questions with probabilities), `local/uvdoc` (unwarps photographed pages).

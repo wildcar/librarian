@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-20 · Fourth Go slice: essential text and de-identified summaries
+- What: internal/layers (rules, line-number removal, repeat and date/medical safeguards, leak and number checks, retry, flags), catalog migration 6 (texts), CLI digest/show.
+- Why: ADR-0005 in the service; sample: 69 documents, no leaks, 1 justified flag, $0.045.
+- Files: internal/layers/*, internal/catalog/texts.go, internal/catalog/catalog.go, internal/report/report.go, cmd/librarian/main.go, docs/adr/0005-*.md
+- Next: MCP server and persons registry.
+
 ## 2026-10-20 · Third Go slice: splitting into documents
 - What: internal/split (rules port, LCS ratio, whole-file model call with windows, review on strong disagreement), catalog migration 5 (documents, split), CLI split/docs, calibration test.
 - Why: ADR-0003 in the service; sample: 100% vs hand labels after making two unreliable rules weak.

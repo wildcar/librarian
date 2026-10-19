@@ -11,6 +11,7 @@ import (
 	"github.com/wildcar/librarian/internal/catalog"
 	"github.com/wildcar/librarian/internal/extract"
 	"github.com/wildcar/librarian/internal/intake"
+	"github.com/wildcar/librarian/internal/layers"
 	"github.com/wildcar/librarian/internal/split"
 )
 
@@ -61,6 +62,50 @@ func FlaggedPages(w io.Writer, fl []catalog.Flagged) {
 		fmt.Fprintf(w, "  %s стр. %d: найдено %d из %d уверенных слов tesseract, подряд пропало до %d; нет в тексте: %s\n",
 			f.SHA256[:12], f.Page, f.Matched, f.Words, f.Run, missing)
 	}
+}
+
+// DigestRun prints the result of one text-layers run.
+func DigestRun(w io.Writer, r *layers.Report) {
+	share := 0.0
+	if r.CharsBefore > 0 {
+		share = 1 - float64(r.CharsAfter)/float64(r.CharsBefore)
+	}
+	fmt.Fprintf(w, "Документов: %d, готово %d (из них на проверку %d), с ошибкой %d. Из текста убрано %.0f%%. "+
+		"Страховка вернула строк: повторов %d, подозрительных %d. Модель стоила $%.3f. Время: %s\n",
+		r.Documents, r.Done, r.Flagged, r.Failed, share*100, r.RestoredRepeats, r.RestoredSuspicious,
+		r.CostUSD, r.Duration.Round(1e9))
+	for _, n := range r.Notes {
+		fmt.Fprintf(w, "  %s\n", n)
+	}
+}
+
+// TextsState prints text-layer totals for the catalog.
+func TextsState(w io.Writer, by map[string]int, cost float64, notes []string) {
+	if len(by) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "Суть и резюме: готово %d, на проверку %d, с ошибкой %d, не обработано %d; модель стоила $%.3f\n",
+		by["done"], by["flagged"], by["error"], by["pending"], cost)
+	for _, n := range notes {
+		fmt.Fprintf(w, "  %s\n", n)
+	}
+}
+
+// ShowLayer prints one text layer of a document.
+func ShowLayer(w io.Writer, d catalog.Document, t catalog.Texts, layer string) {
+	if t.Status == "" {
+		fmt.Fprintf(w, "У документа %s ещё нет сути и резюме.\n", d.ID)
+		return
+	}
+	fmt.Fprintf(w, "Документ %s, стр. %d–%d (%s, %s)\n", d.ID, d.FirstPage, d.LastPage, t.Status, t.Model)
+	if t.Flags != "" {
+		fmt.Fprintf(w, "Проверки: %s\n", t.Flags)
+	}
+	if layer == "essential" {
+		fmt.Fprintf(w, "\n%s\n", t.Essential)
+		return
+	}
+	fmt.Fprintf(w, "\n%s\n", t.Summary)
 }
 
 // SplitRun prints the result of one split run.

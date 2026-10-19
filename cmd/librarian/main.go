@@ -8,6 +8,8 @@
 //	librarian [--home DIR] verify  --account <id> [--limit N] [--workers N]
 //	librarian [--home DIR] split   --account <id> [--limit N] [--model ID]
 //	librarian [--home DIR] docs    --account <id> [<sha256 prefix>]
+//	librarian [--home DIR] digest  --account <id> [--limit N] [--workers N] [--model ID]
+//	librarian [--home DIR] show    --account <id> [--layer summary|essential|verbatim] <document id>
 //	librarian [--home DIR] text    --account <id> <sha256 prefix>
 //	librarian version
 //
@@ -31,6 +33,7 @@ import (
 	"github.com/wildcar/librarian/internal/catalog"
 	"github.com/wildcar/librarian/internal/extract"
 	"github.com/wildcar/librarian/internal/intake"
+	"github.com/wildcar/librarian/internal/layers"
 	"github.com/wildcar/librarian/internal/pages"
 	"github.com/wildcar/librarian/internal/report"
 	"github.com/wildcar/librarian/internal/router"
@@ -49,6 +52,8 @@ const usage = `usage:
   librarian [--home DIR] verify --account <id> [--limit N] [--workers N]
   librarian [--home DIR] split  --account <id> [--limit N] [--model ID]
   librarian [--home DIR] docs   --account <id> [<sha256 prefix>]
+  librarian [--home DIR] digest --account <id> [--limit N] [--workers N] [--model ID]
+  librarian [--home DIR] show   --account <id> [--layer summary|essential|verbatim] <document id>
   librarian [--home DIR] text   --account <id> <sha256 prefix>
   librarian version
 
@@ -107,7 +112,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		defer c.Close()
 		fmt.Fprintf(out, "Аккаунт %s создан: %s\n", a.ID, a.Root())
 		return nil
-	case "ingest", "dupes", "stats", "extract", "verify", "text", "split", "docs":
+	case "ingest", "dupes", "stats", "extract", "verify", "text", "split", "docs", "digest", "show":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
 		id := fs.String("account", "", "account id")
@@ -116,6 +121,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		model := fs.String("model", extract.DefaultModel, "extract: OCR model id")
 		dryRun := fs.Bool("dry-run", false, "extract: count pages and estimate cost only")
 		noCheck := fs.Bool("no-check", false, "extract: skip the tesseract second reading")
+		layer := fs.String("layer", "summary", "show: summary | essential | verbatim")
 		if err := fs.Parse(rest); err != nil {
 			return usageError{err.Error()}
 		}
@@ -172,6 +178,53 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 				return err
 			}
 			report.SplitState(out, bs, nd, notes)
+			tb, tc, tn, err := c.TextsSummary(ctx)
+			if err != nil {
+				return err
+			}
+			report.TextsState(out, tb, tc, tn)
+		case "digest":
+			rc, err := router.Dial(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
+			if err != nil {
+				return err
+			}
+			defer rc.Close()
+			m := *model
+			if m == extract.DefaultModel {
+				m = layers.DefaultModel
+			}
+			st := &layers.Stage{Catalog: c, Model: rc}
+			rep, err := st.Run(ctx, layers.Options{Account: a.ID, Model: m, Workers: *workers, Limit: *limit})
+			if rep != nil {
+				report.DigestRun(out, rep)
+			}
+			return err
+		case "show":
+			if fs.NArg() != 1 {
+				return usageError{"expected a document id"}
+			}
+			d, t, err := c.GetDocument(ctx, fs.Arg(0))
+			if err != nil {
+				return err
+			}
+			switch *layer {
+			case "summary", "essential":
+				report.ShowLayer(out, d, t, *layer)
+			case "verbatim":
+				ps, err := c.Pages(ctx, d.SHA256)
+				if err != nil {
+					return err
+				}
+				var in []catalog.Page
+				for _, p := range ps {
+					if p.Page >= d.FirstPage && p.Page <= d.LastPage {
+						in = append(in, p)
+					}
+				}
+				report.PageText(out, d.SHA256, in)
+			default:
+				return usageError{"--layer must be summary, essential or verbatim"}
+			}
 		case "split":
 			rc, err := router.Dial(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
 			if err != nil {

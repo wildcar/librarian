@@ -97,6 +97,28 @@ what matters while reading risks the verbatim layer that everything else is deri
 from. Marking insignificant lines during OCR could be measured later on the OCR
 reference pages.
 
+## In the service (2026-10-20)
+
+`internal/layers` (`librarian digest`, `librarian show --layer`). Order: rules drop known
+boilerplate; GPT-6 Luna returns line numbers to drop; two safeguards decide — the
+first copy of a fully dropped repeated line comes back, and a dropped line comes back
+when it holds a date the essential text would no longer have, or a medical word or a
+long number with no copy left (contacts and adverts excepted). The summary is written
+from the rule-cleaned text and checked for leaks (names and initials found in the
+document, organisations and their acronyms, contacts, numbers, birth dates) and for
+numbers or dates absent from the source; a failed check gets one regeneration that
+names the violation, then the document is flagged. The prompts were generalised from
+medical to any document ("клиент", "банк", sums), and the summary must say so when the
+document has no date.
+
+On the 69 sample documents: no leaks (automatic check and a manual read of every
+capitalised word), one flagged summary — the model added two courses of a drug into
+«28 дней», a number the document does not contain — no meaningful date lost from the
+essential text (the only dates missing are licence and advert dates removed by rules),
+15% of the text removed, $0.045. Building it surfaced three parser traps worth keeping
+in tests: a rejected date candidate swallowing the real date after it, a size
+«5 × 9,12» read as a date, and «12:50:13 05.12.2019» read as 13.05.12.
+
 ## Consequences
 
 - The default path to the assistant carries no names, numbers or addresses, at the cost
