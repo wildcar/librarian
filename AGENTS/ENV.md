@@ -12,13 +12,14 @@ Update whenever a new tool, credential, or host-specific quirk is learned.
 
 ## Tools
 
-- Go 1.27 (module declares `go 1.24` as the floor).
+- Go 1.27 (module floor `go 1.26.0`, raised by modernc.org/sqlite). No C compiler on dev, so `go test -race` is unavailable here.
 - git 2.53. `gh` CLI is not installed on dev.
 - `pdftotext` is available from Git for Windows (`/mingw64/bin`). Not installed: exiftool, qpdf, ImageMagick, pdfinfo.
 - tesseract 5.4 (winget `UB-Mannheim.TesseractOCR`) at `%LOCALAPPDATA%/Programs/Tesseract-OCR/tesseract.exe`; language data (`rus` from tessdata_best, `eng`, `osd`) in `%LOCALAPPDATA%/librarian/tessdata`.
 - llama.cpp (winget `ggml.llamacpp`): `llama-server.exe` under `%LOCALAPPDATA%/Microsoft/WinGet/Packages/ggml.llamacpp_*`, used by surya.
 - Python: system 3.14; bench venvs `tools/ocrbench/.venv` (3.14) and `.venv312` (3.12 via uv, for surya/paddle, which lack 3.14 wheels).
 - OCR bench cache (rendered pages, engine outputs): `%LOCALAPPDATA%/librarian/ocrbench`.
+- Service data root on dev: `%LOCALAPPDATA%/librarian/home` (account `sergey`, holds the sample folder plus the bench PDF copies as a duplicate demo).
 - model-router-mcp: MCP over Streamable HTTP at `<router>/mcp`, Bearer token. Repo: https://github.com/wildcar/model-router-mcp
 
 ## Credentials & secrets
@@ -35,6 +36,8 @@ go vet ./...
 gofmt -l .
 go test ./...
 go run ./cmd/librarian version
+go build -o $LOCALAPPDATA/librarian/bin/librarian.exe ./cmd/librarian
+LIBRARIAN_HOME=$LOCALAPPDATA/librarian/home librarian ingest --account sergey <folder>
 ```
 
 ## Host-specific quirks

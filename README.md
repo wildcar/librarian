@@ -14,7 +14,11 @@ Status: early draft, see `AGENTS/SPEC.md`.
 
 ```
 go build ./...
-go run ./cmd/librarian version
+export LIBRARIAN_HOME=~/librarian-data          # data root, one folder per account
+go run ./cmd/librarian account create family
+go run ./cmd/librarian ingest --account family ~/Documents/scans
+go run ./cmd/librarian dupes  --account family
+go run ./cmd/librarian stats  --account family
 ```
 
 ## Docs

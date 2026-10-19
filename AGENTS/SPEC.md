@@ -78,15 +78,15 @@ Analysis combines two kinds of functions:
 
 Accounts and persons
 
-1. ⏳ Accounts: create, isolate storage, export or delete an account as one directory. Connecting an assistant needs only the MCP address and the account's Bearer token; OAuth later.
+1. ✅ Accounts: create, isolate storage (`internal/account`). ⏳ Then: export or delete an account as one directory. Connecting an assistant needs only the MCP address and the account's Bearer token; OAuth later.
 2. ⏳ Persons within an account: code, full name, aliases, birth date. A document is attached to one or more persons.
 2a. ⏳ Export a person's documents from one account and import them into another; the copies are independent afterwards. Persons are never shared between accounts.
 
 Intake
 
-3. ⏳ Accept files and folders at any time, and files sent through the MCP tool `add_document`; slow synced folders are read once into a local cache by hash. E-mail and Telegram intake later.
+3. ✅ Folder intake (`librarian ingest`): skips OS/sync/temporary files and counts them, re-reads only files whose size or mtime changed, flags vanished sources as missing without deleting them. ⏳ Then: files sent through the MCP tool `add_document` (kept, they have no other source); e-mail and Telegram intake later.
 4. ⏳ Accept shared-folder links, read-only: Yandex Disk, Google Drive, Nextcloud.
-5. ⏳ Fingerprint and deduplicate files by content within the account; one original, many `source_uri`. Originals of folder and link sources are not kept: `source_uri` + sha256, fetched on demand and checked; uploaded files are kept.
+5. ✅ Fingerprint (sha256, MIME by content with extension as a refinement for containers, mismatch reported) and duplicate report (`librarian dupes`) within the account. Catalog keeps one original, many `source_uri`. Originals of folder and link sources are not kept: `source_uri` + sha256, fetched on demand and checked; uploaded files are kept.
 
 Analysis
 
@@ -123,12 +123,13 @@ AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
   owner's Ubuntu server on the LAN. Development runs on the Windows dev machine.
 - Storage: one directory per account (catalog, file cache, archive tree). The catalog
   database is never inside a folder that a sync client rewrites.
-- Today: a CLI stub (`go build ./cmd/librarian`).
+- Today: a CLI (`librarian account create | ingest | dupes | stats`); data root from `--home` or `LIBRARIAN_HOME`.
 
 ## Current state
 
 - ✅ Repository skeleton, Go module, CLI stub.
-- ✅ Measured choices: OCR engine (ADR-0002), splitting method (ADR-0003).
+- ✅ Measured choices: OCR engine (ADR-0002), splitting method (ADR-0003), text layer model (ADR-0005).
+- ✅ First Go slice: account storage, per-account SQLite catalog, folder intake, duplicate and stats reports.
 - ⏳ Everything in Functional requirements.
 
 See `AGENTS/STATE.md` for the live Now / Next snapshot.

@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-19 · First Go slice: accounts, catalog, intake, duplicates
+- What: internal/account, internal/catalog (SQLite, migrations), internal/intake (walk, sha256, MIME, unchanged detection, missing flags), internal/report; CLI account/ingest/dupes/stats; tests.
+- Why: owner's go-ahead for the first service slice after the measured choices.
+- Files: cmd/librarian/main.go, internal/*, go.mod, AGENTS.md, AGENTS/*
+- Next: OCR stage in Go through the router.
+
 ## 2026-10-19 · GPT-6 Luna for text layers
 - What: ADR-0005 records GPT-6 Luna for essential text and summaries, and why the layers stay out of the OCR call.
 - Why: owner's choice after the layers experiment.

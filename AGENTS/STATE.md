@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- First Go slice done: `librarian account create | ingest | dupes | stats`; per-account SQLite catalog; tested (unit + end-to-end on the sample folder).
 - OCR bake-off done on 14 sample pages (`tools/ocrbench/`, ADR-0002 Accepted): tesseract 78% (9% on handwriting), Gemini 3.1 Flash Lite 93%.
 - Report, reference facts and all engine outputs: `library/_эксперименты/ocr-2026-10/` (outside the repo, personal data).
 - Tesseract text of all 156 sample pages is cached there for the splitting experiment.
@@ -23,7 +24,7 @@ an MCP server from any AI assistant.
 ## Next
 
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
-- First Go slice of the service: account storage root, intake of a folder → sha256 + MIME → per-account catalog → dedup report.
+- Next Go slice: page rendering and OCR through the router for new originals (ADR-0002), storing the verbatim text per page in the account.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.
 
@@ -37,5 +38,6 @@ an MCP server from any AI assistant.
 
 ## Deferred
 
+- `go test -race`: needs cgo/gcc, run it on the Ubuntu server.
 - Go tests and linter beyond `go vet` / `gofmt`: no Go logic yet. `tools/ocrbench` has no tests (throwaway harness).
 - Router provider `codex-oauth` disabled; GPT models via codex subscription not benchmarked.

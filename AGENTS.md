@@ -162,7 +162,7 @@ Go (ADR-0001), SQLite catalog, MCP client to model-router-mcp. Full cheat-sheet:
 
 ```bash
 go mod download                    # install
-go run ./cmd/librarian version     # run
+go run ./cmd/librarian --home DIR ingest --account ID FOLDER   # run (or LIBRARIAN_HOME)
 go build ./...                     # build
 go test ./...                      # test
 go vet ./... && gofmt -l .         # lint (gofmt must print nothing)
@@ -173,8 +173,12 @@ go vet ./... && gofmt -l .         # lint (gofmt must print nothing)
 Map of the codebase so an agent knows where things live.
 
 ```
-cmd/librarian/   CLI entrypoint
-internal/        application packages (pipeline stages, catalog, router client)
+cmd/librarian/      CLI: account create, ingest, dupes, stats
+internal/account/   per-account storage root; the only place that builds account paths
+internal/catalog/   per-account SQLite catalog: originals, sources, intake runs
+internal/intake/    folder intake: walk, skip non-documents, sha256, MIME, unchanged detection
+internal/report/    human-readable reports (Russian)
+tools/ocrbench/     Python experiments: OCR, splitting, text layers
 docs/adr/        architecture decisions
 ```
 
