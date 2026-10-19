@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-19 · ADR-0003 accepted
+- What: owner accepted splitting by one whole-file Argon call with text rules as a cross-check.
+- Why: best result in the splitting experiment; rules stay as an explainable check and fallback.
+- Files: docs/adr/0003-splitting-scans-into-documents.md, AGENTS/SPEC.md, AGENTS/STATE.md, AGENTS/MEMORY.md
+- Next: first Go pipeline slice (folder → hashes → catalog), people registry draft.
+
 ## 2026-10-19 · Splitting experiment
 - What: tools/ocrbench/split.py (rules, decide, hybrid, whole-file chat); hand labels for 124 boundaries; ADR-0003 proposed; filing.md splitting section rewritten.
 - Why: scans hold several documents; needed a measured way to cut them.

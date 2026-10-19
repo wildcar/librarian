@@ -1,6 +1,6 @@
 # ADR-0003: Splitting multi-document scans — whole-file model call, rules as a check
 
-**Status:** Proposed
+**Status:** Accepted (2026-10-19)
 **Date:** 2026-10-19
 **Deciders:** wildcar
 **Scope:** splitting stage; `tools/ocrbench/split.py`
