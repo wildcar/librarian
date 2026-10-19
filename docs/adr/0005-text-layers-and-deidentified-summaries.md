@@ -63,13 +63,38 @@ in the catalog with provenance (SPEC principle 3). Filters in `search_documents`
 them without exposing text. Whether a tool returns the institution or doctor name is
 decided per field: by default it returns the de-identified value.
 
+## Measurement (2026-10-19)
+
+`tools/ocrbench/layers.py` on the 68 sample documents; outputs and the review in the
+archive's `_эксперименты/layers-2026-10/`. The essential text is built from line numbers
+the model returns, so a model cannot reword it. Real losses and leaks were confirmed by
+reading every flagged case.
+
+| Model | Essential: facts lost | Summary: leaks | Summary: invented facts | $ per document, both steps |
+|---|---|---|---|---|
+| GPT-6 Luna | 0 | 0 | 0 | 0.0010 |
+| Gemini 4 Argon | 0 | 0 | 0 | 0.0147 |
+| Claude Haiku 5.5 | 1 (a visit date) | 1 (clinic abbreviation) | 0 | 0.0020 |
+| Gemini 3.1 Flash Lite | 4 (a title, totals, a table header, equipment) + 1 broken reply | 0 | 1 (a date) | 0.0016 |
+
+Lessons that change the pipeline:
+
+- A model told to drop repeated headers drops every copy; the patient's name and age
+  can live only there. The safeguard restores the first copy of a fully dropped group.
+- The leak check must know institution abbreviations (a regional oncology dispensary
+  came back as its four-letter acronym).
+- The number check must compare dates by meaning and accept superscript and
+  space-separated forms, otherwise false alarms bury real ones.
+
+Recommendation (owner to confirm): GPT-6 Luna for both steps, after the rules, with
+the safeguard and both checks; Gemini 4 Argon for summaries if more detail is wanted.
+
 ## Consequences
 
 - The default path to the assistant carries no names, numbers or addresses, at the cost
   of one summary call per document.
-- Two extra model passes per document (essential text, summary). With Gemini-class
-  models this is cents per hundred pages; the exact model and price are to be measured
-  on the sample, like ADR-0002 and ADR-0003.
+- Two extra model passes per document (essential text, summary): about $0.001 per
+  document with GPT-6 Luna, $0.015 with Gemini 4 Argon (measured above).
 - Keeping the verbatim text means improved cleaning or summarising can be rerun without
   paying for OCR again.
 - Not storing originals of link sources means verification depends on the source being

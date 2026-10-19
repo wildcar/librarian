@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-19 · Text layers experiment
+- What: tools/ocrbench/layers.py (line-number removal, de-identified summary, leak/number/loss checks, header safeguard); 4 models on 68 documents; ADR-0005 measurement section.
+- Why: measure ADR-0005 before building it: which model, cost, leaks, lost facts.
+- Files: tools/ocrbench/layers.py, tools/ocrbench/README.md, docs/adr/0005-text-layers-and-deidentified-summaries.md, AGENTS/*
+- Next: owner picks the model; then the first Go slice of the service.
+
 ## 2026-10-19 · ADR-0004 questions resolved; ADR-0005 text layers
 - What: owner's answers recorded (MCP upload now, token auth, per-account spend, export/import instead of shared persons, originals not cached); ADR-0005: verbatim, essential, de-identified summary.
 - Why: the owner wants least data sent to the assistant and no noise in analysis.

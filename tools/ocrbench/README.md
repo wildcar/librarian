@@ -16,6 +16,7 @@ LLAMA_CPP_BINARY=<llama-server.exe> .venv312/Scripts/python run_surya.py $C --on
 .venv/Scripts/python run_router.py $C --models <id1,id2> --only <ids>   # ROUTER_URL/ROUTER_TOKEN in ../../.env
 .venv/Scripts/python score.py $C <reference.json> <out dir>
 .venv/Scripts/python split.py $C <split_reference.json> <out dir>      # document boundaries: rules, decide, hybrid, chat
+.venv/Scripts/python layers.py $C <split_reference.json> <persons.json> <out dir> --models <ids>   # essential text + de-identified summaries
 ```
 
 Scoring: a fact scores 1 when found verbatim after normalisation (case, ё,
