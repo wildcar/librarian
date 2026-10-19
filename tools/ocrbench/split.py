@@ -139,8 +139,8 @@ QUESTION = {
             "new, separate paper document, rather than continue the document of page A?"),
         "criteria": {
             "true": ("Page B begins another document: its own heading or clinic letterhead "
-                     "after page A was finished (signature, date, closing lines), or a "
-                     "handwritten date at the very top of page B."),
+                     "after page A was finished (signature, date, closing lines)."
+                     "{hand_date}"),
             "false": ("Page B continues page A: a table or text that goes on, the next page "
                       "of a numbered report, a signature page, or ultrasound/ECG printouts, "
                       "specimen sticker sheets and patient diaries that belong to the same "
@@ -152,16 +152,46 @@ QUESTION = {
 CHAT_PROMPT = """Ниже текст страниц одного PDF из семейного медицинского архива, страницы по порядку.
 Раздели их на отдельные бумажные документы. Правила:
 - Снимки УЗИ и ленты ЭКГ, листы наклеек с номерами образцов и дневник пациента относятся к протоколу того же обследования.
-- Рукописная дата в самом верху страницы обычно стоит на первой странице документа.
-- Документ, продолженный на следующей странице (таблица, текст, подпись), остаётся одним документом.
+{hand_date}- Документ, продолженный на следующей странице (таблица, текст, подпись), остаётся одним документом.
 Ответь только JSON вида {"starts": [номера первых страниц документов]}, нумерация с 1.
 
 """
 
 
-async def model_answers(pairs, files, methods, cache_dir, chat_model):
-    dc_path = cache_dir / "cache-decide.json"
-    ch_path = cache_dir / f"cache-chat-{re.sub(r'[^\w.-]+', '_', chat_model)}.json"
+# The handwritten date was a habit of the owner for one batch of scans only
+# (2026-10-19); --strip-hand-date measures the methods without it.
+HAND_DATE_HINT = {
+    "decide": " Or a handwritten date at the very top of page B.",
+    "chat": "- Рукописная дата в самом верху страницы обычно стоит на первой странице документа.\n",
+}
+
+
+def question(strip: bool) -> dict:
+    q = json.loads(json.dumps(QUESTION))
+    t = q["new_document"]["criteria"]["true"]
+    q["new_document"]["criteria"]["true"] = t.replace("{hand_date}", "" if strip else HAND_DATE_HINT["decide"])
+    return q
+
+
+def chat_prompt(strip: bool) -> str:
+    return CHAT_PROMPT.replace("{hand_date}", "" if strip else HAND_DATE_HINT["chat"])
+
+
+def strip_hand_date(t: str) -> str:
+    """Drop a handwritten date transcribed as the first line of a page."""
+    ls = t.splitlines()
+    for i, l in enumerate(ls):
+        if l.strip():
+            if HAND_DATE.match(l):
+                del ls[i]
+            break
+    return "\n".join(ls)
+
+
+async def model_answers(pairs, files, methods, cache_dir, chat_model, strip=False):
+    sfx = "-nodate" if strip else ""
+    dc_path = cache_dir / f"cache-decide{sfx}.json"
+    ch_path = cache_dir / f"cache-chat-{re.sub(r'[^\w.-]+', '_', chat_model)}{sfx}.json"
     dc = json.loads(dc_path.read_text(encoding="utf-8")) if dc_path.exists() else {}
     ch = json.loads(ch_path.read_text(encoding="utf-8")) if ch_path.exists() else {}
     cost = defaultdict(float)
@@ -177,7 +207,7 @@ async def model_answers(pairs, files, methods, cache_dir, chat_model):
                         continue
                     res = await s.call_tool("decide", {
                         "external_user_id": "librarian", "app_name": "librarian",
-                        "questions": QUESTION,
+                        "questions": question(strip),
                         "state": {"page_A_end": a[-1500:], "page_B_start": b[:1500]},
                     })
                     if res.is_error:
@@ -195,7 +225,7 @@ async def model_answers(pairs, files, methods, cache_dir, chat_model):
                                        for i, t in enumerate(texts, 1))
                     res = await s.call_tool("chat", {
                         "external_user_id": "librarian", "app_name": "librarian",
-                        "model_id": chat_model, "text": CHAT_PROMPT + body,
+                        "model_id": chat_model, "text": chat_prompt(strip) + body,
                         "params": {"temperature": 0},
                     })
                     if res.is_error:
@@ -223,6 +253,8 @@ def main() -> None:
     ap.add_argument("--text", default="router-google_gemini-4-argon")
     ap.add_argument("--methods", default="rules,decide,hybrid,chat")
     ap.add_argument("--chat-model", default="google/gemini-3.1-flash-lite")
+    ap.add_argument("--strip-hand-date", action="store_true",
+                    help="remove handwritten dates from page text and from the prompts")
     args = ap.parse_args()
     rr.load_env()
 
@@ -236,7 +268,8 @@ def main() -> None:
     source = {}
     for e in manifest:
         sha = e["sha256"][:12]
-        files[sha].append((cache / "out" / args.text / f"{e['page_id']}.txt").read_text(encoding="utf-8"))
+        t = (cache / "out" / args.text / f"{e['page_id']}.txt").read_text(encoding="utf-8")
+        files[sha].append(strip_hand_date(t) if args.strip_hand_date else t)
         source[sha] = e["source"]
 
     pairs = []  # (key, text A, text B)
@@ -246,7 +279,7 @@ def main() -> None:
 
     dc, ch, cost = ({}, {}, {})
     if {"decide", "hybrid", "chat"} & set(methods):
-        dc, ch, cost = asyncio.run(model_answers(pairs, files, methods, out, args.chat_model))
+        dc, ch, cost = asyncio.run(model_answers(pairs, files, methods, out, args.chat_model, args.strip_hand_date))
 
     truth, unsure = {}, set()
     for sha, spec in ref.items():
@@ -308,7 +341,7 @@ def main() -> None:
             if key in dc:
                 extra += f" — decide p={dc[key]['p']:.2f}"
             md.append(f"- {source[sha]} p{k}|p{int(k) + 1}: правда {'новый' if truth[key] else 'тот же'}{extra}")
-    (out / f"split-scores-{args.text}.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    (out / f"split-scores-{args.text}{'-nodate' if args.strip_hand_date else ''}.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     print("\n".join(md[:2 + len(rows)]))
     print(f"boundaries scored: {sum(1 for k in truth if k not in unsure)}, new: {sum(1 for k, v in truth.items() if v and k not in unsure)}")
 

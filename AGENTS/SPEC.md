@@ -3,97 +3,126 @@
 Source of truth for *what the product does* and *how it is built*. Keep it in sync
 with reality (update before code when the contract changes).
 
-Status: **draft**. Filing layout and naming: `docs/filing.md`.
+Status: **draft**. Service shape: `docs/adr/0004-service-accounts-persons-mcp.md`.
+Filing layout and naming: `docs/filing.md`.
 
 ## Purpose
 
-A pedantic librarian for a family document archive. It takes local files or
-folders, or links to files/folders in cloud storage, analyses every file, and
-files it into an ordered archive that several people (family members) share.
-Photos may join later.
+A pedantic librarian as a service. Each user of the service (an *account*) keeps the
+documents of one or more people (*persons*): their own, a parent's, a child's.
+Accounts are isolated from each other. Documents arrive as an irregular stream —
+files, folders, links to shared cloud folders — and the librarian catalogues every one
+of them. The user works with the archive through an MCP server, from any AI assistant
+they like. Photos may join later.
 
 Analysis combines two kinds of functions:
 
 - **Algorithmic** — anything that can be done well without a neural network:
   hashing, exact and near duplicates, file type by magic bytes, metadata, text
   layer extraction, dates and identifiers by pattern.
-- **Model-based** — classification, summaries, OCR of hard scans, entity
-  extraction, chosen by a flexible policy and called through
+- **Model-based** — OCR, splitting scans into documents, classification, summaries,
+  entity extraction, chosen by a flexible policy and called through
   [model-router-mcp](https://github.com/wildcar/model-router-mcp).
 
 ## Principles
 
-1. Originals are never modified or deleted by analysis. Any change to files on
+1. Accounts are isolated: separate storage root, separate catalog, separate files.
+   No operation can address two accounts (ADR-0004).
+2. Originals are never modified or deleted by analysis. Any change to files on
    disk or in the cloud is a plan first (dry run), applied only on confirmation.
-2. Every fact about a document carries provenance: which function produced it
+3. Every fact about a document carries provenance: which function produced it
    (rule or model id), when, and with what confidence.
-3. Algorithmic first, model second: a model is called only when rules cannot
-   answer with enough confidence. Model cost is tracked per family member.
-4. Processing is idempotent and resumable: a file already analysed (same
+4. Algorithmic first, model second: a model is called only when rules cannot
+   answer with enough confidence or measurably lose (ADR-0002, ADR-0003). Model cost
+   is tracked per account.
+5. Processing is idempotent and resumable: a file already analysed (same
    content hash, same pipeline version) is not analysed again.
-5. Sources are read-only. The archive (a local tree, possibly cloud-synced by the
-   user) holds derived artefacts: a Markdown sidecar per logical document and,
-   per source policy, a PDF cut of it. The archive can rebuild the catalog.
-6. Extraction quality beats language purity: an extractor is chosen by measured
+6. Sources are read-only. The account's archive holds derived artefacts: a Markdown
+   sidecar per logical document and, per source policy, a PDF cut of it. The archive
+   can rebuild the catalog.
+7. Extraction quality beats language purity: an extractor is chosen by measured
    results on real samples, whether it is a Go library, an external tool, a
    Python sidecar or a model through the router.
+8. Nothing relies on marks a particular owner happened to make on paper (such as a
+   handwritten date); facts come from the document's own content.
 
 ## Stack
 
-- Go (see `docs/adr/0001-go-as-core-language.md`).
-- MCP client to model-router-mcp: `github.com/modelcontextprotocol/go-sdk`.
-- Catalog: SQLite (`modernc.org/sqlite`, pure Go).
+- Go (see `docs/adr/0001-go-as-core-language.md`), one long-running service.
+- MCP: `github.com/modelcontextprotocol/go-sdk` — server for users, client for the router.
+- Catalog: SQLite per account (`modernc.org/sqlite`, pure Go).
 - OCR: `google/gemini-4-argon` through the router, pinned by `model_id` (primary), plus local tesseract as a second reading (ADR-0002).
+- Splitting: one whole-file `chat` call with `google/gemini-4-argon`, text rules as a cross-check (ADR-0003).
 - Bake-off harness for extractors: `tools/ocrbench/` (Python).
 
 ## Architecture (sketch)
 
 ```
-sources ──→ ingest ──→ fingerprint ──→ extract ──→ classify ──→ file («подшивка»)
- local fs    enumerate   sha256, size,   text layer,  rules first,   place into the
- cloud       files,      MIME by magic,  metadata,    then model     ordered archive
-             watch       dedup           EXIF, OCR    via router     (plan → apply)
-                              │              │            │
-                              └──────────── catalog (SQLite) ──────── provenance, cost
-                                                          │
-                                                 model-router-mcp (MCP, Streamable HTTP):
-                                                 chat, decide, image-to-text, local/uvdoc
+                       ┌──────────────────── account A (isolated) ────────────────────┐
+ files, folders,       │ intake → fingerprint → OCR → split → extract facts → file     │
+ cloud share links ───►│ queue    sha256, MIME  (02)   (03)   dates, persons,  tree +  │
+ (stream, any time)    │          dedup                       type, summary    sidecars │
+                       │                    └──────── catalog.sqlite ────────┘         │
+                       └────────────────────────────────▲──────────────────────────────┘
+                                                        │ account resolved from credential
+ AI assistant (any) ──── MCP (Streamable HTTP, HTTPS) ──┘  list_persons, search_documents,
+                                                           get_document, get_file, add_document,
+                                                           list_inbox / resolve_inbox
+ pipeline ──── MCP client ────► model-router-mcp: chat (OCR, split), decide, local/uvdoc
 ```
 
 ## Functional requirements
 
-1. ⏳ Accept local files and folders as input; slow synced folders are read once into a local cache by hash.
-2. ⏳ Accept shared-folder links, read-only: Yandex Disk, Google Drive, Nextcloud.
-3. ⏳ Fingerprint and deduplicate files by content; one original, many `source_uri`.
-4. ⏳ Extract text and metadata algorithmically; OCR when there is no text layer: a vision model via the router plus tesseract, disagreement on print flags the page (ADR-0002).
-4a. ⏳ Names and dates read from handwriting are resolved against the people registry and date rules, never stored as read.
-5. ⏳ Split multi-document scans into logical documents by page ranges: a whole-file model call plus text rules as a cross-check (ADR-0003).
-5a. ⏳ Reassemble documents whose pages are not contiguous and restore page order.
-6. ⏳ Classify documents: rules first, models through the router as fallback.
-7. ⏳ File into the archive tree with standard names `YYYY-MM-DD <PERSON> <Title>.<ext>` (`docs/filing.md`).
-8. ⏳ Virtual collections: saved catalog queries materialised as `Коллекции/<name>.md`.
-9. ⏳ People registry (code, name, aliases, birth date); document owner and a reserved `visibility` field. Access is not enforced yet.
+Accounts and persons
+
+1. ⏳ Accounts: create, authenticate (per-account credential), isolate storage; export or delete an account as one directory.
+2. ⏳ Persons within an account: code, full name, aliases, birth date. A document is attached to one or more persons.
+
+Intake
+
+3. ⏳ Accept files and folders at any time; slow synced folders are read once into a local cache by hash.
+4. ⏳ Accept shared-folder links, read-only: Yandex Disk, Google Drive, Nextcloud.
+5. ⏳ Fingerprint and deduplicate files by content within the account; one original, many `source_uri`.
+
+Analysis
+
+6. ⏳ Extract text and metadata algorithmically; OCR when there is no text layer: a vision model via the router plus tesseract, disagreement on print flags the page (ADR-0002).
+7. ⏳ Split multi-document scans into logical documents by page ranges: a whole-file model call plus text rules as a cross-check (ADR-0003).
+7a. ⏳ Reassemble documents whose pages are not contiguous and restore page order.
+8. ⏳ Extract the document date from the document content (rules first, model second).
+9. ⏳ Resolve persons named in a document against the account's persons (aliases, birth date); names read from handwriting are never stored as read.
+10. ⏳ Classify documents: rules first, models through the router as fallback.
+11. ⏳ Anything below confidence thresholds goes to the account's inbox for the owner's decision.
+
+Output
+
+12. ⏳ MCP server: `list_persons`, `search_documents`, `get_document`, `get_file`, `add_document`, `list_inbox` / `resolve_inbox` (draft names, ADR-0004).
+13. ⏳ Archive tree per account with standard names `YYYY-MM-DD <PERSON> <Title>.<ext>` (`docs/filing.md`), usable as an export.
+14. ⏳ Virtual collections: saved catalog queries, materialised as `Коллекции/<name>.md` and available through MCP.
 
 ## Project structure
 
 ```
-cmd/librarian/   CLI entrypoint
+cmd/librarian/   service and CLI entrypoint
 docs/filing.md   archive layout, naming, sidecar format
-internal/        application packages (added as the pipeline appears)
 docs/adr/        architecture decisions
+internal/        application packages (added as the pipeline appears)
 tools/ocrbench/  OCR bake-off and splitting experiment: render pages, run engines, score against hand labels
 AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
 ```
 
 ## Deployment
 
-- Not decided: the dev machine or an Ubuntu server on the LAN reachable from the internet.
-  Today: a local CLI binary (`go build ./cmd/librarian`).
-- Archive: a local folder; the catalog database lives outside it (sync clients and SQLite do not mix).
+- A long-running service reachable from the internet over HTTPS. First candidate: the
+  owner's Ubuntu server on the LAN. Development runs on the Windows dev machine.
+- Storage: one directory per account (catalog, file cache, archive tree). The catalog
+  database is never inside a folder that a sync client rewrites.
+- Today: a CLI stub (`go build ./cmd/librarian`).
 
 ## Current state
 
 - ✅ Repository skeleton, Go module, CLI stub.
+- ✅ Measured choices: OCR engine (ADR-0002), splitting method (ADR-0003).
 - ⏳ Everything in Functional requirements.
 
 See `AGENTS/STATE.md` for the live Now / Next snapshot.
@@ -101,5 +130,5 @@ See `AGENTS/STATE.md` for the live Now / Next snapshot.
 ## Data sources & dependencies
 
 - model-router-mcp: `https://mr.wildcar.org/mcp/` over Streamable HTTP, Bearer auth; every call carries
-  `external_user_id="librarian"` (groups the librarian's spend in router stats) and `app_name="librarian"`.
+  `external_user_id="librarian"` (groups the librarian's spend in router stats; per-account attribution is an open question) and `app_name="librarian"`.
 - Cloud sources: Yandex Disk, Google Drive, Nextcloud — shared-folder links, read-only.

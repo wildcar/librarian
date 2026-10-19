@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-19 · Service shape (ADR-0004); splitting rechecked without handwritten dates
+- What: ADR-0004 accepted (accounts, persons, stream intake, MCP output); SPEC, filing.md, AGENTS.md rules reworked; split.py --strip-hand-date, ADR-0003 rechecked (Argon still 100%).
+- Why: owner described the service shape; handwritten dates were his marks for one batch only.
+- Files: docs/adr/0004-service-accounts-persons-mcp.md, docs/adr/0003-*.md, docs/filing.md, AGENTS.md, AGENTS/*, tools/ocrbench/split.py
+- Next: answer ADR-0004 open questions; first Go slice with account storage and intake.
+
 ## 2026-10-19 · ADR-0003 accepted
 - What: owner accepted splitting by one whole-file Argon call with text rules as a cross-check.
 - Why: best result in the splitting experiment; rules stay as an explainable check and fallback.

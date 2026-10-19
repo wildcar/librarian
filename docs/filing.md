@@ -1,6 +1,10 @@
 # Filing («подшивка») — archive layout and naming
 
-Draft, 2026-10-18. Contract-level points are mirrored in `AGENTS/SPEC.md`.
+Draft, 2026-10-18; revised 2026-10-19 for the service shape (ADR-0004). Contract-level
+points are mirrored in `AGENTS/SPEC.md`.
+
+Everything below applies **per account**: each account has its own sources, catalog and
+archive tree, and nothing is shared between accounts.
 
 ## Two layers: sources and the archive
 
@@ -14,8 +18,9 @@ Every original is recorded once in the catalog by content hash (sha256), togethe
 with every place it was seen (`source_uri`). Moving or renaming an original does not
 create a new document.
 
-**The archive** is a local folder tree (`library/`) that the librarian writes. It may
-be synced to a cloud by the user's own tools. It holds derived artefacts only:
+**The archive** is the account's folder tree (`<account>/library/`) that the librarian
+writes. It is an export and the source the catalog can be rebuilt from; the main way to
+use the archive is the MCP server. It holds derived artefacts only:
 
 - a **sidecar** `.md` per logical document: metadata, links back to the original, a
   summary («выжимка») and the full text;
@@ -25,8 +30,8 @@ be synced to a cloud by the user's own tools. It holds derived artefacts only:
 ## Tree
 
 ```
-library/
-  ЕБВ/                                   one folder per person, named by person code
+<account>/library/
+  ЕБВ/                                   one folder per person of the account, named by person code
     Медицина/
       Приемы-назначения/
         2026-07-14 ЕБВ Прием кардиолога.md
@@ -46,11 +51,12 @@ taxonomy file that a human edits; the librarian only proposes additions.
 
 `YYYY-MM-DD <PERSON> <Title>.<ext>` — e.g. `2026-07-14 ЕБВ Прием кардиолога.pdf`.
 
-- Date is the **document date** (the visit, the test, the contract), never the scan or
-  file date. Scanner timestamps are unreliable: part of the sample set is named
-  `Scan_20190101_…`, the scanner's clock was reset.
+- Date is the **document date** (the visit, the test, the contract), taken from the
+  document's content: never the scan or file date, and never a mark someone wrote on
+  the paper afterwards. Scanner timestamps are unreliable: part of the sample set is
+  named `Scan_20190101_…`, the scanner's clock was reset.
 - Partial date: `2026-07` or `2026`. Unknown date: the document goes to `Входящие/`.
-- `PERSON` is the person code from the people registry (initials, `ЕБВ`). A household
+- `PERSON` is the person code from the account's persons (initials, `ЕБВ`). A household
   document uses `Семья`.
 - Title is short, Russian, sentence case: document type plus the one detail that tells
   it apart (`Прием кардиолога`, `Общий анализ крови`, `Выписка Сбербанк`).
@@ -75,7 +81,6 @@ sources:
 facts:                           # every fact keeps its provenance
   date:   {value: 2026-07-14, by: rule/date-pattern, conf: 0.98}
   type:   {value: Прием-назначение, by: model/<model_id>, conf: 0.91}
-visibility: owner                # reserved for access control, unused today
 pipeline: 1                      # pipeline version that produced this file
 ---
 
@@ -98,8 +103,7 @@ PDFs hold 68 documents). The librarian splits by page ranges (ADR-0003):
 1. OCR every page (ADR-0002).
 2. One model call per file over the text of all pages returns the first page of each
    document.
-3. Text rules check it independently: a handwritten date on top of a page, running
-   page numbers, a repeated letterhead, the same case or contract number, a page
+3. Text rules check it independently: running page numbers, a repeated letterhead, the same case or contract number, a page
    that starts mid-table, printouts placed before their protocol. A strong rule that
    disagrees with the model sends the file to `Входящие/`.
 4. Printouts (ultrasound frames, ECG tapes), specimen sticker sheets and patient
@@ -118,9 +122,11 @@ regenerated on each run. Nothing is copied, so a document in five collections st
 exists once; and a plain `.md` with links works in any sync client and in Obsidian,
 unlike shortcuts or symlinks.
 
-## People and access (placeholder)
+## Accounts and persons
 
-`people` registry: code, full name, aliases (name spellings found in documents, used by
-rules to recognise the person), birth date (tells namesakes apart). Every document has
-an owner (`person`) and a `visibility` field reserved for future access rules. Today
-one human librarian maintains everyone's documents and visibility is not enforced.
+An **account** is a user of the service and the unit of isolation (ADR-0004). It keeps the
+documents of one or more **persons**: code, full name, aliases (name spellings found in
+documents, used by rules to recognise the person), birth date (tells namesakes apart).
+Every document is attached to one or more persons of its account. Access control
+between accounts is physical separation; access rules inside an account are not needed
+yet.

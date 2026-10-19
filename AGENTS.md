@@ -7,7 +7,7 @@ in `AGENTS/` docs; repeatable procedures belong in skills under `.claude/skills/
 
 ## Project
 
-librarian — a pedantic librarian that ingests local and cloud documents, analyses them (rules first, models via model-router-mcp) and files them into an ordered archive shared by a family.
+librarian — a pedantic librarian as a service: isolated accounts, each keeping the documents of several persons, fed by an irregular stream of files and cloud links, catalogued with rules and models (via model-router-mcp) and served to the user through an MCP server (ADR-0004).
 
 ## Environment
 
@@ -152,6 +152,8 @@ Hard constraints and invariants this project must not violate. Keep each rule on
 - Never modify or delete a user's original files during analysis; changes to files are a plan first, applied only on confirmation.
 - All model calls go through model-router-mcp; no direct provider SDKs or API keys in this repo.
 - Every stored fact about a document records its provenance (rule or model id, time, confidence).
+- Accounts are isolated: one storage root and one catalog per account; no code path may read or write two accounts (ADR-0004).
+- Never rely on marks an owner made on paper (e.g. handwritten dates); facts come from the document's content.
 
 ## Stack & Commands
 

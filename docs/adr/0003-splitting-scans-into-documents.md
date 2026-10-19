@@ -29,10 +29,23 @@ protocol of their examination.
 | `decide` on every boundary | 78% | 100% | 17 of 27 | $0.011 |
 | Rules (tesseract text) | 57% | 47% | 15 of 27 | 0 |
 
+Rerun without the handwritten date (2026-10-19). The owner's handwritten date on the
+first page of each document (58 of 68 here) was a habit for this batch only, so the
+dates were removed from the page text and from the prompts (`--strip-hand-date`):
+
+| Method | Precision | Recall | Files without error | Cost for the folder |
+|---|---|---|---|---|
+| Chat over the whole file, Gemini 4 Argon | 100% | 100% | 27 of 27 | $0.21 |
+| Chat over the whole file, Gemini 3.1 Flash Lite | 90% | 100% | 23 of 27 | $0.024 |
+| Rules (Argon text) | 93% | 75% | 19 of 27 | 0 |
+| Rules, weak cases sent to `decide` | 88% | 83% | 19 of 27 | ~$0.002 |
+| `decide` on every boundary | 80% | 100% | 18 of 27 | $0.011 |
+
 Findings:
 
-- The owner writes a date by hand on the first page of almost every document (58 of
-  68). It is the strongest single signal, and only a good OCR sees it.
+- The whole-file Argon call does not depend on the handwritten date: 100% either way.
+- The rules do: without the date their recall drops from 94% to 75%. They remain a
+  useful check against extra cuts (precision 93%), much less against missed ones.
 - The rules were tuned once on the same data (56% → 94% precision after fixing three
   general mistakes and a regex bug), so their figure is optimistic.
 - `decide` is well calibrated at the extremes and close to a coin toss between 0.5 and
@@ -46,7 +59,8 @@ Findings:
    `google/gemini-4-argon`, given the OCR text of all pages and the filing conventions,
    returning the first page of each document.
 2. The text rules run independently. Where a strong rule disagrees with the model,
-   the file goes to `Входящие/` for the owner to confirm.
+   the file goes to `Входящие/` for the owner to confirm. The rules must not rely on
+   handwritten dates.
 3. `decide` is not used for splitting.
 4. Reassembling non-contiguous documents and restoring page order are a separate,
    later step.

@@ -1,10 +1,12 @@
 # librarian
 
-A pedantic librarian for a family document archive. Give it local files or folders,
-or links to cloud storage; it fingerprints, deduplicates and reads every document,
-classifies it (rules first, AI models through
-[model-router-mcp](https://github.com/wildcar/model-router-mcp) when rules are not
-enough), and files it into an ordered archive shared by several people.
+A pedantic librarian as a service. Each account keeps the documents of one or more
+people. Documents arrive whenever they arrive — files, folders, links to shared cloud
+folders — and the librarian fingerprints, reads, splits and catalogues every one of
+them (rules first, AI models through
+[model-router-mcp](https://github.com/wildcar/model-router-mcp) where they measurably
+win). Users work with their archive through an MCP server, from any AI assistant.
+Accounts are isolated from each other.
 
 Status: early draft, see `AGENTS/SPEC.md`.
 
