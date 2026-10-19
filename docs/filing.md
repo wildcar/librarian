@@ -22,8 +22,9 @@ create a new document.
 writes. It is an export and the source the catalog can be rebuilt from; the main way to
 use the archive is the MCP server. It holds derived artefacts only:
 
-- a **sidecar** `.md` per logical document: metadata, links back to the original, a
-  summary («выжимка») and the full text;
+- a **sidecar** `.md` per logical document: metadata, links back to the original, the
+  de-identified summary («Резюме») and the essential text («Суть»), see ADR-0005. The
+  verbatim OCR text stays in account storage, outside the tree;
 - optionally a **PDF copy** of the logical document (pages cut out of the original
   scan), per source policy: `copy: none | split`. Cloud sources default to `none`.
 
@@ -84,11 +85,11 @@ facts:                           # every fact keeps its provenance
 pipeline: 1                      # pipeline version that produced this file
 ---
 
-## Выжимка
-...
+## Резюме
+...   de-identified: «пациент», «кардиолог», «частная клиника»; no names or numbers
 
-## Текст
-...
+## Суть
+...   the document's text without form notes, ads, contacts, repeated letterheads
 ```
 
 The archive must survive without the catalog: the catalog can be rebuilt by reading

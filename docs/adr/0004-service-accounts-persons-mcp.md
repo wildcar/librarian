@@ -1,6 +1,6 @@
 # ADR-0004: A multi-account service — persons inside accounts, an MCP server as the output
 
-**Status:** Accepted (2026-10-19; details in Open questions)
+**Status:** Accepted (2026-10-19; open questions resolved the same day)
 **Date:** 2026-10-19
 **Deciders:** wildcar
 **Scope:** whole product: data model, storage layout, interfaces, deployment
@@ -40,19 +40,25 @@ one directory.
 **Input.** An asynchronous pipeline per account: intake → fingerprint/dedup → OCR
 (ADR-0002) → split (ADR-0003) → extract facts (dates, persons, type) → file. Intake
 accepts single files, folders and shared-folder links (Yandex Disk, Google Drive,
-Nextcloud). Each item is processed when it arrives; nothing waits for a batch.
+Nextcloud), and files sent through the MCP tool `add_document`. E-mail and a Telegram
+bot are later channels. Each item is processed when it arrives; nothing waits for a
+batch.
 
-**Output.** One MCP endpoint (Streamable HTTP). The credential identifies the account;
-every tool runs inside that account only. First tools (names are a draft):
+**Output.** One MCP endpoint (Streamable HTTP). Connecting an assistant needs exactly
+two things: the endpoint address and the account's token (`Authorization: Bearer`).
+The token identifies the account; every tool runs inside that account only. OAuth may
+come later. What the tools return by default is set by ADR-0005 (text layers). First
+tools (names are a draft):
 
 | Tool | Purpose |
 |---|---|
 | `list_persons` | persons of the account |
 | `search_documents` | full-text and facet search: person, type, date range, institution |
-| `get_document` | metadata, summary, full text, provenance |
-| `get_file` | the original or the PDF cut |
+| `get_document` | metadata and the de-identified summary; the essential text on request (ADR-0005) |
+| `get_file` | the original, fetched from its source for verification |
 | `add_document` | put a file or a link into the intake |
 | `list_inbox` / `resolve_inbox` | items waiting for the owner's decision |
+| `export_person` / `import_person` | hand one person's documents to another account |
 
 **Dates** come from the document content (rules first, model second). The handwritten
 dates of the first sample batch are not a signal the service may rely on.
@@ -69,21 +75,27 @@ Ubuntu server on the owner's LAN is the first candidate.
   The tree remains as an export and as the source the catalog can be rebuilt from.
 - The service needs account management and per-account credentials, which a local tool
   did not.
-- Model spend must be attributable per account (router `external_user_id`).
+- Model spend is attributed per account: every router call carries the account as
+  `external_user_id` (`librarian:<account_id>`), so the router console and `get_usage`
+  show each account separately while the prefix still groups the whole service.
 - Go fits the shape (ADR-0001): one long-running binary, the official MCP Go SDK for
   the server side as well as the router client.
 
-## Open questions
+## Resolved questions (owner, 2026-10-19)
 
-- Intake channels beyond files and links: an MCP upload tool, a watched folder, e-mail,
-  a Telegram bot?
-- Authentication for the MCP endpoint: static per-account tokens first, OAuth later?
-- Router attribution: `external_user_id="librarian"` today; per account
-  (`librarian/<account>`) later?
-- Can a person be shared between accounts (two siblings keeping a parent's documents)?
-  Today: no, each account keeps its own copy.
-- Where originals live for link sources: cache them in the account's storage, or fetch
-  on demand?
+- **Intake channels:** files, folders, links, and an MCP upload tool from the start;
+  e-mail and Telegram later.
+- **Authentication:** as simple as possible — the MCP address plus a per-account token.
+  OAuth probably later.
+- **Router attribution:** per account.
+- **Persons shared between accounts:** no, too fragile. Instead one account can export a
+  person's documents (say, a child's) and another account imports them; after that the
+  two copies live independently.
+- **Originals of link sources:** not cached. An original is only needed to check a fact
+  against the primary source; the service keeps its `source_uri` and sha256 and fetches
+  it on demand, flagging a mismatch. Analysis and answers work from text (ADR-0005).
+  A file that arrives through `add_document` has no other source, so the service keeps
+  that one.
 
 ## Alternatives considered
 

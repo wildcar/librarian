@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-19 · ADR-0004 questions resolved; ADR-0005 text layers
+- What: owner's answers recorded (MCP upload now, token auth, per-account spend, export/import instead of shared persons, originals not cached); ADR-0005: verbatim, essential, de-identified summary.
+- Why: the owner wants least data sent to the assistant and no noise in analysis.
+- Files: docs/adr/0004-*.md, docs/adr/0005-text-layers-and-deidentified-summaries.md, docs/filing.md, AGENTS.md, AGENTS/*
+- Next: experiment with essential text and summaries on the 68 sample documents.
+
 ## 2026-10-19 · Service shape (ADR-0004); splitting rechecked without handwritten dates
 - What: ADR-0004 accepted (accounts, persons, stream intake, MCP output); SPEC, filing.md, AGENTS.md rules reworked; split.py --strip-hand-date, ADR-0003 rechecked (Argon still 100%).
 - Why: owner described the service shape; handwritten dates were his marks for one batch only.

@@ -16,7 +16,10 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - Cloud sources are only read, never written; locally the archive keeps text copies and summaries (user, 2026-10-18).
 - The product is a multi-account service: an account (user) keeps documents of several persons, accounts are isolated, input is an irregular stream, output is an MCP server for any AI assistant (user, 2026-10-19, ADR-0004). Supersedes the 2026-10-18 note that access control was not needed.
 - All scanned pages, medical ones included, may be sent to vision models through the router (user, 2026-10-18). Why: reading quality on handwriting matters more than keeping scans local; recorded in ADR-0002.
-- Router calls carry `external_user_id="librarian"` (user, 2026-10-18). Why: the librarian's spend shows separately in the router console and `get_usage`; the field does not affect access.
+- Router calls carry `external_user_id="librarian:<account_id>"` in the service (user, 2026-10-19; earlier just `librarian`). Why: spend per account in the router console and `get_usage`; the field does not affect access.
+- Connecting an assistant must stay simple: MCP address + account token; OAuth later (user, 2026-10-19).
+- Persons are never shared between accounts; sharing is export from one account and import into another (user, 2026-10-19). Why: shared ownership is too fragile.
+- Originals are only for verification against the primary source; analysis uses the essential text, most requests the de-identified summary without patient, doctor or clinic (user, 2026-10-19, ADR-0005).
 
 ## Project facts
 

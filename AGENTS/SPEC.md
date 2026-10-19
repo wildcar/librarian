@@ -45,6 +45,8 @@ Analysis combines two kinds of functions:
    Python sidecar or a model through the router.
 8. Nothing relies on marks a particular owner happened to make on paper (such as a
    handwritten date); facts come from the document's own content.
+9. Least data by default: MCP tools return de-identified summaries; the essential text,
+   the verbatim text and the original only on explicit request (ADR-0005).
 
 ## Stack
 
@@ -53,6 +55,7 @@ Analysis combines two kinds of functions:
 - Catalog: SQLite per account (`modernc.org/sqlite`, pure Go).
 - OCR: `google/gemini-4-argon` through the router, pinned by `model_id` (primary), plus local tesseract as a second reading (ADR-0002).
 - Splitting: one whole-file `chat` call with `google/gemini-4-argon`, text rules as a cross-check (ADR-0003).
+- Text layers: original (reference only), verbatim OCR text, essential text, de-identified summary (ADR-0005).
 - Bake-off harness for extractors: `tools/ocrbench/` (Python).
 
 ## Architecture (sketch)
@@ -75,14 +78,15 @@ Analysis combines two kinds of functions:
 
 Accounts and persons
 
-1. ⏳ Accounts: create, authenticate (per-account credential), isolate storage; export or delete an account as one directory.
+1. ⏳ Accounts: create, isolate storage, export or delete an account as one directory. Connecting an assistant needs only the MCP address and the account's Bearer token; OAuth later.
 2. ⏳ Persons within an account: code, full name, aliases, birth date. A document is attached to one or more persons.
+2a. ⏳ Export a person's documents from one account and import them into another; the copies are independent afterwards. Persons are never shared between accounts.
 
 Intake
 
-3. ⏳ Accept files and folders at any time; slow synced folders are read once into a local cache by hash.
+3. ⏳ Accept files and folders at any time, and files sent through the MCP tool `add_document`; slow synced folders are read once into a local cache by hash. E-mail and Telegram intake later.
 4. ⏳ Accept shared-folder links, read-only: Yandex Disk, Google Drive, Nextcloud.
-5. ⏳ Fingerprint and deduplicate files by content within the account; one original, many `source_uri`.
+5. ⏳ Fingerprint and deduplicate files by content within the account; one original, many `source_uri`. Originals of folder and link sources are not kept: `source_uri` + sha256, fetched on demand and checked; uploaded files are kept.
 
 Analysis
 
@@ -93,10 +97,12 @@ Analysis
 9. ⏳ Resolve persons named in a document against the account's persons (aliases, birth date); names read from handwriting are never stored as read.
 10. ⏳ Classify documents: rules first, models through the router as fallback.
 11. ⏳ Anything below confidence thresholds goes to the account's inbox for the owner's decision.
+11a. ⏳ Essential text: the verbatim text minus insignificant parts (form notes, ads, contacts, repeated letterheads, barcodes, empty fields), by removal only, checked against the verbatim text (ADR-0005).
+11b. ⏳ De-identified summary of every document: no names of patient, doctor or clinic, no identifying numbers; checked by rules (ADR-0005).
 
 Output
 
-12. ⏳ MCP server: `list_persons`, `search_documents`, `get_document`, `get_file`, `add_document`, `list_inbox` / `resolve_inbox` (draft names, ADR-0004).
+12. ⏳ MCP server: `list_persons`, `search_documents`, `get_document` (summary by default, essential text on request), `get_file` (original, for verification), `add_document`, `list_inbox` / `resolve_inbox`, `export_person` / `import_person` (draft names, ADR-0004, ADR-0005).
 13. ⏳ Archive tree per account with standard names `YYYY-MM-DD <PERSON> <Title>.<ext>` (`docs/filing.md`), usable as an export.
 14. ⏳ Virtual collections: saved catalog queries, materialised as `Коллекции/<name>.md` and available through MCP.
 
@@ -130,5 +136,5 @@ See `AGENTS/STATE.md` for the live Now / Next snapshot.
 ## Data sources & dependencies
 
 - model-router-mcp: `https://mr.wildcar.org/mcp/` over Streamable HTTP, Bearer auth; every call carries
-  `external_user_id="librarian"` (groups the librarian's spend in router stats; per-account attribution is an open question) and `app_name="librarian"`.
+  `external_user_id="librarian:<account_id>"` (per-account spend; the bench tools use plain `librarian`) and `app_name="librarian"`.
 - Cloud sources: Yandex Disk, Google Drive, Nextcloud — shared-folder links, read-only.

@@ -154,6 +154,7 @@ Hard constraints and invariants this project must not violate. Keep each rule on
 - Every stored fact about a document records its provenance (rule or model id, time, confidence).
 - Accounts are isolated: one storage root and one catalog per account; no code path may read or write two accounts (ADR-0004).
 - Never rely on marks an owner made on paper (e.g. handwritten dates); facts come from the document's content.
+- MCP tools return the de-identified summary by default; essential/verbatim text and originals only on explicit request (ADR-0005).
 
 ## Stack & Commands
 
