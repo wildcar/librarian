@@ -45,6 +45,25 @@ var schema = []string{
 		new_files INTEGER NOT NULL DEFAULT 0,
 		errors    INTEGER NOT NULL DEFAULT 0
 	);`,
+	// 2: verbatim text per page (ADR-0002, ADR-0005) and extraction state.
+	`CREATE TABLE pages (
+		sha256   TEXT NOT NULL REFERENCES originals(sha256),
+		page     INTEGER NOT NULL,
+		method   TEXT NOT NULL,            -- text-layer | ocr
+		engine   TEXT NOT NULL,            -- pdftotext, or the model that answered
+		text     TEXT NOT NULL,
+		cost_usd REAL NOT NULL DEFAULT 0,
+		pipeline INTEGER NOT NULL,
+		created  TEXT NOT NULL,
+		PRIMARY KEY (sha256, page)
+	);
+	CREATE TABLE extraction (
+		sha256  TEXT PRIMARY KEY REFERENCES originals(sha256),
+		pages   INTEGER,
+		status  TEXT NOT NULL,             -- done | error | unsupported
+		error   TEXT,
+		updated TEXT NOT NULL
+	);`,
 }
 
 // Catalog is an open account catalog.

@@ -33,6 +33,7 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - Splitting multi-document scans: one whole-file chat call with Gemini 4 Argon, text rules as a cross-check; `decide` is not used for splitting (user, 2026-10-19, ADR-0003). Why: 100% on 27 files against 94% for rules and 78% for decide.
 - Essential text and summaries: `openai/gpt-6-luna` (user, 2026-10-19, ADR-0005). The layers are not folded into the OCR call: OCR is per page and precedes splitting, and the verbatim layer must stay a pure reading.
 - Text layers (2026-10-19): a model told to drop repeated headers drops every copy, and a running header may be the only place the patient's name is — always restore the first copy. Claude Haiku 5.5 leaked a clinic as an acronym and (earlier) invented a diagnosis; Gemini 3.1 Flash Lite invented a date — neither suits medical text.
+- Go pipeline OCR (pdftoppm grayscale, long side 2000, same prompt) matches the Python bench: 98% vs 99% facts, $1.39 for 156 pages (2026-10-19).
 - Router `decide` replies carry cost in `cost_usd` (not `cost`).
 - Router provider `codex-oauth` was disabled on 2026-10-18; OpenAI models were reached through OpenRouter instead.
 - Router tools useful here: `chat` (text and images), `decide` (typed yes/no, choice, score questions with probabilities), `local/uvdoc` (unwarps photographed pages).

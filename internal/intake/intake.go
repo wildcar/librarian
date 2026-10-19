@@ -55,6 +55,21 @@ func URI(path string) string {
 	return "file://" + p
 }
 
+// PathFromURI is the inverse of URI for file:// sources.
+func PathFromURI(uri string) (string, error) {
+	p, ok := strings.CutPrefix(uri, "file://")
+	if !ok {
+		return "", fmt.Errorf("not a local source: %s", uri)
+	}
+	if len(p) > 2 && p[0] == '/' && p[2] == ':' { // /C:/... on Windows
+		p = p[1:]
+	}
+	return filepath.FromSlash(p), nil
+}
+
+// HashFile returns the sha256 of a file, hex-encoded.
+func HashFile(path string) (string, error) { return hashFile(path) }
+
 type job struct {
 	path string
 	uri  string

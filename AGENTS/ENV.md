@@ -13,6 +13,7 @@ Update whenever a new tool, credential, or host-specific quirk is learned.
 ## Tools
 
 - Go 1.27 (module floor `go 1.26.0`, raised by modernc.org/sqlite). No C compiler on dev, so `go test -race` is unavailable here.
+- poppler 25.07 (winget `oschwartz10612.Poppler`), not on PATH: `%LOCALAPPDATA%/Microsoft/WinGet/Packages/oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe/poppler-25.07.0/Library/bin` — set `LIBRARIAN_POPPLER_DIR` to it for `extract` and for the extract tests (they skip without it).
 - git 2.53. `gh` CLI is not installed on dev.
 - `pdftotext` is available from Git for Windows (`/mingw64/bin`). Not installed: exiftool, qpdf, ImageMagick, pdfinfo.
 - tesseract 5.4 (winget `UB-Mannheim.TesseractOCR`) at `%LOCALAPPDATA%/Programs/Tesseract-OCR/tesseract.exe`; language data (`rus` from tessdata_best, `eng`, `osd`) in `%LOCALAPPDATA%/librarian/tessdata`.
@@ -38,6 +39,8 @@ go test ./...
 go run ./cmd/librarian version
 go build -o $LOCALAPPDATA/librarian/bin/librarian.exe ./cmd/librarian
 LIBRARIAN_HOME=$LOCALAPPDATA/librarian/home librarian ingest --account sergey <folder>
+set -a; . ./.env; set +a      # ROUTER_URL, ROUTER_TOKEN
+LIBRARIAN_POPPLER_DIR=<poppler bin> librarian extract --account sergey [--dry-run] --workers 6
 ```
 
 ## Host-specific quirks
@@ -50,3 +53,4 @@ LIBRARIAN_HOME=$LOCALAPPDATA/librarian/home librarian ingest --account sergey <f
 - surya 0.22 under CPU contention returns empty pages without an error; run it alone.
 - MCP Python SDK (new API): `streamable_http_client(url, http_client=create_mcp_http_client(headers=...))`; result fields are `structured_content` / `is_error`.
 - Git Bash mangles Cyrillic in Python stdin heredocs; write the script to a file and run `python -X utf8`.
+- Editing Go/Python sources through a Python script written by a shell heredoc turns `\n` inside string literals into real newlines; write edit scripts with the file tool, or edit the source directly.

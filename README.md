@@ -19,6 +19,12 @@ go run ./cmd/librarian account create family
 go run ./cmd/librarian ingest --account family ~/Documents/scans
 go run ./cmd/librarian dupes  --account family
 go run ./cmd/librarian stats  --account family
+
+# page text: PDF text layer or OCR through model-router-mcp; needs poppler
+export ROUTER_URL=https://<router>/mcp/ ROUTER_TOKEN=<token>
+go run ./cmd/librarian extract --account family --dry-run   # pages and cost estimate
+go run ./cmd/librarian extract --account family
+go run ./cmd/librarian text    --account family <sha256 prefix>
 ```
 
 ## Docs

@@ -9,8 +9,61 @@ import (
 	"strings"
 
 	"github.com/wildcar/librarian/internal/catalog"
+	"github.com/wildcar/librarian/internal/extract"
 	"github.com/wildcar/librarian/internal/intake"
 )
+
+// ExtractRun prints the result of one extraction run.
+func ExtractRun(w io.Writer, r *extract.Report, dryRun bool) {
+	if dryRun {
+		fmt.Fprintf(w, "Оригиналов без текста: %d. Страниц: текстовый слой %d, нужен OCR %d, уже готово %d.\n",
+			r.Originals, r.PagesTextLayer, r.PagesOCR, r.PagesSkipped)
+		fmt.Fprintf(w, "Оценка стоимости OCR: $%.2f (по $%.4f за страницу).\n", r.EstimateUSD, extract.EstimateUSDPerPage)
+		return
+	}
+	fmt.Fprintf(w, "Оригиналов: %d, готово %d, неподдерживаемых типов %d, с ошибкой %d\n",
+		r.Originals, r.Done, r.Unsupported, r.Failed)
+	fmt.Fprintf(w, "Страниц: текстовый слой %d, OCR %d, уже были готовы %d. OCR стоил $%.3f. Время: %s\n",
+		r.PagesTextLayer, r.PagesOCR, r.PagesSkipped, r.CostUSD, r.Duration.Round(1e9))
+	for _, e := range r.Errors {
+		fmt.Fprintf(w, "  ошибка %s\n", e)
+	}
+}
+
+var statusLabels = map[string]string{
+	"done": "готово", "error": "с ошибкой", "unsupported": "тип пока не поддерживается", "pending": "ещё не обработано",
+}
+
+// Extraction prints the state of page text across the catalog.
+func Extraction(w io.Writer, x catalog.ExtractionStats) {
+	parts := []string{}
+	for _, k := range sortedKeys(x.ByStatus) {
+		l := statusLabels[k]
+		if l == "" {
+			l = k
+		}
+		parts = append(parts, fmt.Sprintf("%s %d", l, x.ByStatus[k]))
+	}
+	fmt.Fprintf(w, "Текст страниц: %s\n", strings.Join(parts, ", "))
+	if len(x.ByMethod) > 0 {
+		fmt.Fprintf(w, "  страниц из текстового слоя %d, из OCR %d, OCR стоил $%.3f\n",
+			x.ByMethod["text-layer"], x.ByMethod["ocr"], x.CostUSD)
+	}
+	for _, e := range x.Errors {
+		fmt.Fprintf(w, "  ошибка %s\n", e)
+	}
+}
+
+// PageText prints the verbatim text of an original, page by page.
+func PageText(w io.Writer, sha string, ps []catalog.Page) {
+	if len(ps) == 0 {
+		fmt.Fprintf(w, "У оригинала %s ещё нет текста.\n", sha[:12])
+		return
+	}
+	for _, p := range ps {
+		fmt.Fprintf(w, "===== %s, страница %d (%s, %s) =====\n%s\n", sha[:12], p.Page, p.Method, p.Engine, strings.TrimRight(p.Text, "\n"))
+	}
+}
 
 // Intake prints the result of one intake run.
 func Intake(w io.Writer, r *intake.Report) {

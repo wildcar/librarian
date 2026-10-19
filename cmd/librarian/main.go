@@ -4,10 +4,13 @@
 //	librarian [--home DIR] ingest  --account <id> [--workers N] <folder>
 //	librarian [--home DIR] dupes   --account <id>
 //	librarian [--home DIR] stats   --account <id>
+//	librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run]
+//	librarian [--home DIR] text    --account <id> <sha256 prefix>
 //	librarian version
 //
 // The data root is --home or LIBRARIAN_HOME; every account lives in its own
-// directory under it.
+// directory under it. extract reads ROUTER_URL and ROUTER_TOKEN for the
+// model router, and LIBRARIAN_POPPLER_DIR when poppler is not on PATH.
 package main
 
 import (
@@ -21,8 +24,11 @@ import (
 
 	"github.com/wildcar/librarian/internal/account"
 	"github.com/wildcar/librarian/internal/catalog"
+	"github.com/wildcar/librarian/internal/extract"
 	"github.com/wildcar/librarian/internal/intake"
+	"github.com/wildcar/librarian/internal/pages"
 	"github.com/wildcar/librarian/internal/report"
+	"github.com/wildcar/librarian/internal/router"
 )
 
 // version is overridden at build time: -ldflags "-X main.version=..."
@@ -33,6 +39,8 @@ const usage = `usage:
   librarian [--home DIR] ingest --account <id> [--workers N] <folder>
   librarian [--home DIR] dupes  --account <id>
   librarian [--home DIR] stats  --account <id>
+  librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run]
+  librarian [--home DIR] text   --account <id> <sha256 prefix>
   librarian version
 
 The data root is --home or the LIBRARIAN_HOME environment variable.`
@@ -90,11 +98,14 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		defer c.Close()
 		fmt.Fprintf(out, "Аккаунт %s создан: %s\n", a.ID, a.Root())
 		return nil
-	case "ingest", "dupes", "stats":
+	case "ingest", "dupes", "stats", "extract", "text":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
 		id := fs.String("account", "", "account id")
-		workers := fs.Int("workers", 4, "parallel hashing workers")
+		workers := fs.Int("workers", 4, "parallel workers (hashing, OCR calls)")
+		limit := fs.Int("limit", 0, "extract: originals per run, 0 = all pending")
+		model := fs.String("model", extract.DefaultModel, "extract: OCR model id")
+		dryRun := fs.Bool("dry-run", false, "extract: count pages and estimate cost only")
 		if err := fs.Parse(rest); err != nil {
 			return usageError{err.Error()}
 		}
@@ -136,6 +147,45 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 				return err
 			}
 			report.Stats(out, s, mm)
+			x, err := c.ExtractionSummary(ctx)
+			if err != nil {
+				return err
+			}
+			report.Extraction(out, x)
+		case "extract":
+			pop := pages.Poppler{Dir: os.Getenv("LIBRARIAN_POPPLER_DIR")}
+			if err := pop.Check(); err != nil {
+				return err
+			}
+			st := &extract.Stage{Catalog: c, Poppler: pop}
+			if !*dryRun {
+				rc, err := router.Dial(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
+				if err != nil {
+					return err
+				}
+				defer rc.Close()
+				st.OCR = rc
+			}
+			rep, err := st.Run(ctx, extract.Options{
+				Account: a.ID, Model: *model, Workers: *workers, Limit: *limit, DryRun: *dryRun,
+			})
+			if rep != nil {
+				report.ExtractRun(out, rep, *dryRun)
+			}
+			return err
+		case "text":
+			if fs.NArg() != 1 {
+				return usageError{"expected a sha256 prefix"}
+			}
+			sha, err := c.ResolveSHA(ctx, fs.Arg(0))
+			if err != nil {
+				return err
+			}
+			ps, err := c.Pages(ctx, sha)
+			if err != nil {
+				return err
+			}
+			report.PageText(out, sha, ps)
 		}
 		return nil
 	}

@@ -90,7 +90,7 @@ Intake
 
 Analysis
 
-6. ⏳ Extract text and metadata algorithmically; OCR when there is no text layer: a vision model via the router plus tesseract, disagreement on print flags the page (ADR-0002).
+6. ✅ Verbatim page text (`librarian extract`): the PDF text layer where it has at least 100 letters, otherwise the page rendered by `pdftoppm` (grayscale JPEG, long side 2000) and read by `google/gemini-4-argon` through the router; images (JPEG, PNG, TIFF, BMP, GIF, WebP) are scaled the same way. The source is re-hashed before reading; a changed file is an error, not a silent re-read. Pages are stored one by one, so a failed page is retried alone. ⏳ Then: tesseract as the second reading, other types (DOCX, plain text). Original contract: a vision model via the router plus tesseract, disagreement on print flags the page (ADR-0002).
 7. ⏳ Split multi-document scans into logical documents by page ranges: a whole-file model call plus text rules as a cross-check (ADR-0003).
 7a. ⏳ Reassemble documents whose pages are not contiguous and restore page order.
 8. ⏳ Extract the document date from the document content (rules first, model second).
@@ -123,13 +123,14 @@ AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
   owner's Ubuntu server on the LAN. Development runs on the Windows dev machine.
 - Storage: one directory per account (catalog, file cache, archive tree). The catalog
   database is never inside a folder that a sync client rewrites.
-- Today: a CLI (`librarian account create | ingest | dupes | stats`); data root from `--home` or `LIBRARIAN_HOME`.
+- Today: a CLI (`librarian account create | ingest | dupes | stats | extract | text`); data root from `--home` or `LIBRARIAN_HOME`; `extract` needs `ROUTER_URL`, `ROUTER_TOKEN` and poppler (`LIBRARIAN_POPPLER_DIR` when it is not on PATH).
 
 ## Current state
 
 - ✅ Repository skeleton, Go module, CLI stub.
 - ✅ Measured choices: OCR engine (ADR-0002), splitting method (ADR-0003), text layer model (ADR-0005).
 - ✅ First Go slice: account storage, per-account SQLite catalog, folder intake, duplicate and stats reports.
+- ✅ Second Go slice: verbatim page text through the text layer or OCR via the router, stored per page in the account catalog.
 - ⏳ Everything in Functional requirements.
 
 See `AGENTS/STATE.md` for the live Now / Next snapshot.
@@ -139,3 +140,4 @@ See `AGENTS/STATE.md` for the live Now / Next snapshot.
 - model-router-mcp: `https://mr.wildcar.org/mcp/` over Streamable HTTP, Bearer auth; every call carries
   `external_user_id="librarian:<account_id>"` (per-account spend; the bench tools use plain `librarian`) and `app_name="librarian"`.
 - Cloud sources: Yandex Disk, Google Drive, Nextcloud — shared-folder links, read-only.
+- poppler command-line tools (`pdftotext`, `pdftoppm`): `poppler-utils` on Linux.

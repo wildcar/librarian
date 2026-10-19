@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- Second Go slice done: `librarian extract` — text layer or OCR (Gemini 4 Argon via router) per page, stored in the account catalog. Sample account: 156 pages OCR'd for $1.39 in 10 min, 0 errors; facts score 98% vs 99% in the bench (the difference is one rotated handwritten page).
 - First Go slice done: `librarian account create | ingest | dupes | stats`; per-account SQLite catalog; tested (unit + end-to-end on the sample folder).
 - OCR bake-off done on 14 sample pages (`tools/ocrbench/`, ADR-0002 Accepted): tesseract 78% (9% on handwriting), Gemini 3.1 Flash Lite 93%.
 - Report, reference facts and all engine outputs: `library/_эксперименты/ocr-2026-10/` (outside the repo, personal data).
@@ -24,7 +25,8 @@ an MCP server from any AI assistant.
 ## Next
 
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
-- Next Go slice: page rendering and OCR through the router for new originals (ADR-0002), storing the verbatim text per page in the account.
+- Next Go slice: splitting scans into documents (ADR-0003) over the stored page text, documents table in the catalog.
+- Then: essential text and summaries with GPT-6 Luna (ADR-0005), then the MCP server.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.
 
@@ -38,6 +40,8 @@ an MCP server from any AI assistant.
 
 ## Deferred
 
+- Tesseract second reading (ADR-0002 decision 2) is not in the Go pipeline yet.
+- `extract` processes originals one after another, pages in parallel; parallelism across originals if volume needs it.
 - `go test -race`: needs cgo/gcc, run it on the Ubuntu server.
 - Go tests and linter beyond `go vet` / `gofmt`: no Go logic yet. `tools/ocrbench` has no tests (throwaway harness).
 - Router provider `codex-oauth` disabled; GPT models via codex subscription not benchmarked.
