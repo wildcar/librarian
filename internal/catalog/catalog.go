@@ -109,6 +109,27 @@ var schema = []string{
 		pipeline            INTEGER NOT NULL,
 		updated             TEXT NOT NULL
 	);`,
+	// 7: persons of the account, links to documents, document dates and the
+	// full-text index the MCP search runs on (ADR-0004).
+	`CREATE TABLE persons (
+		code       TEXT PRIMARY KEY,         -- short code used in file names, e.g. ЕБВ
+		label      TEXT NOT NULL,            -- what the assistant sees, e.g. "Папа"
+		full_name  TEXT NOT NULL,
+		aliases    TEXT NOT NULL DEFAULT '[]', -- JSON: spellings found in documents
+		birth_date TEXT,                     -- YYYY-MM-DD
+		created    TEXT NOT NULL
+	);
+	CREATE TABLE doc_persons (
+		doc_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+		code   TEXT NOT NULL REFERENCES persons(code) ON DELETE CASCADE,
+		method TEXT NOT NULL,                -- rule | manual
+		reason TEXT NOT NULL,
+		PRIMARY KEY (doc_id, code)
+	);
+	ALTER TABLE texts ADD COLUMN doc_date TEXT;          -- YYYY-MM-DD
+	ALTER TABLE texts ADD COLUMN doc_date_source TEXT;   -- where the date came from
+	CREATE VIRTUAL TABLE docs_fts USING fts5(doc_id UNINDEXED, summary, essential,
+		tokenize = 'unicode61 remove_diacritics 2');`,
 }
 
 // Catalog is an open account catalog.

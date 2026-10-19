@@ -75,6 +75,8 @@ type Stage struct {
 	Catalog *catalog.Catalog
 	Model   router.Chatter
 	Now     func() time.Time
+
+	extra []string // forbidden strings from the account's persons, set by Run
 }
 
 // Run builds the text layers of pending documents.
@@ -92,6 +94,20 @@ func (s *Stage) Run(ctx context.Context, o Options) (*Report, error) {
 	docs, err := s.Catalog.PendingTexts(ctx, o.Limit)
 	if err != nil {
 		return nil, err
+	}
+	// The account's persons are forbidden in every summary, whatever the
+	// document itself spells out.
+	persons, err := s.Catalog.Persons(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.extra = nil
+	for _, p := range persons {
+		s.extra = append(s.extra, p.FullName)
+		s.extra = append(s.extra, p.Aliases...)
+		if t, err := time.Parse("2006-01-02", p.BirthDate); err == nil {
+			s.extra = append(s.extra, t.Format("02.01.2006"))
+		}
 	}
 	rep := &Report{Documents: len(docs)}
 	var (
@@ -192,7 +208,7 @@ func (s *Stage) one(ctx context.Context, o Options, d catalog.Document) catalog.
 
 	// Summary from the rule-cleaned text (the measured input), checked; one
 	// retry, then the document is flagged for the owner.
-	forbidden := Forbidden(verbatim)
+	forbidden := Forbidden(verbatim, s.extra...)
 	source := strings.Join(cleaned, "\n")
 	var flags []string
 	for attempt := 0; attempt < 2; attempt++ {

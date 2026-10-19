@@ -356,6 +356,20 @@ func dates(text string) map[ymd]bool {
 	return d
 }
 
+// Dates returns every date in text as day, month and two-digit year, in any
+// of the shapes datesIn understands, ordered by position.
+func Dates(text string) [][3]int {
+	_, spans := datesIn(text)
+	sort.Slice(spans, func(i, j int) bool { return spans[i][0] < spans[j][0] })
+	var out [][3]int
+	for _, sp := range spans {
+		for k := range dates(text[sp[0]:sp[1]]) {
+			out = append(out, [3]int(k))
+		}
+	}
+	return out
+}
+
 func atoi(s string) int {
 	n := 0
 	for _, r := range s {

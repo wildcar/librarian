@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- Fifth Go slice done: persons, `index`, tokens, `librarian serve` with list_persons / search_documents / get_document; checked with a real MCP client; 61 of 69 sample documents linked to ЕБВ.
 - Fourth Go slice done: `librarian digest` / `show`; sample: 69 documents, 0 leaks, 1 flagged summary (a computed «28 дней»), $0.045.
 - Third Go slice done: `librarian split` / `docs`; sample: 69 documents, 100% against hand labels, $0.24; two rules made weak after calibration.
 - Tesseract second reading in the Go pipeline (ADR-0002): `extract` checks new OCR pages, `verify` backfills; 156 sample pages checked, 0 flagged (lowest share 0.92, longest missing run 1).
@@ -28,8 +29,9 @@ an MCP server from any AI assistant.
 ## Next
 
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
-- Next Go slice: the MCP server — per-account token, `list_persons` (needs persons), `search_documents`, `get_document` (summary by default).
-- Persons registry in the account: needed by the MCP tools and as an extra leak source.
+- One command that runs the whole pipeline for new files (ingest → extract → split → digest → index), and `add_document` over MCP.
+- Deploy on the Ubuntu server behind HTTPS so an assistant can connect from anywhere.
+- Inbox for the owner: unlinked documents, flagged summaries, split reviews.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.
 
@@ -43,6 +45,8 @@ an MCP server from any AI assistant.
 
 ## Deferred
 
+- Search ranking: bm25 favours short texts that mention a word; tune on real questions.
+- Date sanity: device clocks (an ECG dated 1970), dates before the person's birth.
 - Flagged summaries and split reviews wait for the inbox.
 - Split review files have no inbox yet; `stats` lists them.
 - Flagged pages are listed by `stats`; they go to the inbox once the inbox exists.

@@ -78,8 +78,8 @@ Analysis combines two kinds of functions:
 
 Accounts and persons
 
-1. ✅ Accounts: create, isolate storage (`internal/account`). ⏳ Then: export or delete an account as one directory. Connecting an assistant needs only the MCP address and the account's Bearer token; OAuth later.
-2. ⏳ Persons within an account: code, full name, aliases, birth date. A document is attached to one or more persons.
+1. ✅ Accounts: create, isolate storage (`internal/account`); per-account Bearer token (`librarian token create`). ⏳ Then: export or delete an account as one directory. Connecting an assistant needs only the MCP address and the account's Bearer token; OAuth later.
+2. ✅ Persons within an account (`librarian person add|list`): code, label, full name, aliases, birth date. `librarian index` links documents by full name, alias or birth date; manual links are never overwritten. ⏳ Then: the owner links what rules could not.
 2a. ⏳ Export a person's documents from one account and import them into another; the copies are independent afterwards. Persons are never shared between accounts.
 
 Intake
@@ -93,7 +93,7 @@ Analysis
 6. ✅ Verbatim page text (`librarian extract`): the PDF text layer where it has at least 100 letters, otherwise the page rendered by `pdftoppm` (grayscale JPEG, long side 2000) and read by `google/gemini-4-argon` through the router; images (JPEG, PNG, TIFF, BMP, GIF, WebP) are scaled the same way. The source is re-hashed before reading; a changed file is an error, not a silent re-read. Pages are stored one by one, so a failed page is retried alone. Every OCR page also gets the tesseract second reading at 300 dpi; a printed page whose confident tesseract words are under 90% present in the Argon text, or that misses 3 consecutive ones, is flagged for the owner (`librarian verify` backfills, `stats` lists flagged pages). ⏳ Then: other types (DOCX, plain text); flagged pages into the inbox. Original contract: a vision model via the router plus tesseract, disagreement on print flags the page (ADR-0002).
 7. ✅ Split originals into documents (`librarian split`, `librarian docs`): one-page originals directly; others by one `chat` call with `google/gemini-4-argon` over the page text (windows of 30 pages, seams by rules); strong rules that contradict the model send the file to review. Documents get stable ids `<sha256[:16]>-<first page>` (ADR-0003).
 7a. ⏳ Reassemble documents whose pages are not contiguous and restore page order.
-8. ⏳ Extract the document date from the document content (rules first, model second).
+8. ✅ Document date (`librarian index`): taken from the first sentence of the summary, which names the document and its date; provenance `summary`. ⏳ Then: sanity checks (device clocks, dates before birth).
 9. ⏳ Resolve persons named in a document against the account's persons (aliases, birth date); names read from handwriting are never stored as read.
 10. ⏳ Classify documents: rules first, models through the router as fallback.
 11. ⏳ Anything below confidence thresholds goes to the account's inbox for the owner's decision.
@@ -102,7 +102,7 @@ Analysis
 
 Output
 
-12. ⏳ MCP server: `list_persons`, `search_documents`, `get_document` (summary by default, essential text on request), `get_file` (original, for verification), `add_document`, `list_inbox` / `resolve_inbox`, `export_person` / `import_person` (draft names, ADR-0004, ADR-0005).
+12. ✅ MCP server (`librarian serve`, ADR-0004): `list_persons`, `search_documents`, `get_document`. ⏳ Then: `list_persons`, `search_documents`, `get_document` (summary by default, essential text on request), `get_file` (original, for verification), `add_document`, `list_inbox` / `resolve_inbox`, `export_person` / `import_person` (draft names, ADR-0004, ADR-0005).
 13. ⏳ Archive tree per account with standard names `YYYY-MM-DD <PERSON> <Title>.<ext>` (`docs/filing.md`), usable as an export.
 14. ⏳ Virtual collections: saved catalog queries, materialised as `Коллекции/<name>.md` and available through MCP.
 
@@ -123,7 +123,7 @@ AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
   owner's Ubuntu server on the LAN. Development runs on the Windows dev machine.
 - Storage: one directory per account (catalog, file cache, archive tree). The catalog
   database is never inside a folder that a sync client rewrites.
-- Today: a CLI (`librarian account create | ingest | dupes | stats | extract | verify | split | docs | digest | show | text`); data root from `--home` or `LIBRARIAN_HOME`; `extract` needs `ROUTER_URL`, `ROUTER_TOKEN` and poppler (`LIBRARIAN_POPPLER_DIR` when it is not on PATH).
+- Today: a CLI (`librarian account create | ingest | dupes | stats | extract | verify | split | docs | digest | show | person | index | token | serve | text`); data root from `--home` or `LIBRARIAN_HOME`; `extract` needs `ROUTER_URL`, `ROUTER_TOKEN` and poppler (`LIBRARIAN_POPPLER_DIR` when it is not on PATH).
 
 ## Current state
 
@@ -133,6 +133,7 @@ AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
 - ✅ Second Go slice: verbatim page text through the text layer or OCR via the router, stored per page in the account catalog; tesseract second reading with flags.
 - ✅ Third Go slice: splitting originals into documents, documents table in the catalog.
 - ✅ Fourth Go slice: essential text and de-identified summary per document with checks.
+- ✅ Fifth Go slice: persons registry, document dates, full-text index, account tokens, MCP server with three tools.
 - ⏳ Everything in Functional requirements.
 
 See `AGENTS/STATE.md` for the live Now / Next snapshot.

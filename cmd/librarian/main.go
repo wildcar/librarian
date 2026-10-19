@@ -10,6 +10,10 @@
 //	librarian [--home DIR] docs    --account <id> [<sha256 prefix>]
 //	librarian [--home DIR] digest  --account <id> [--limit N] [--workers N] [--model ID]
 //	librarian [--home DIR] show    --account <id> [--layer summary|essential|verbatim] <document id>
+//	librarian [--home DIR] person  add|list --account <id> [--code --name --label --alias --birth]
+//	librarian [--home DIR] index   --account <id>
+//	librarian [--home DIR] token   create --account <id>
+//	librarian [--home DIR] serve   [--addr 127.0.0.1:8090]
 //	librarian [--home DIR] text    --account <id> <sha256 prefix>
 //	librarian version
 //
@@ -26,14 +30,19 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
+	"time"
 
 	"github.com/wildcar/librarian/internal/account"
 	"github.com/wildcar/librarian/internal/catalog"
 	"github.com/wildcar/librarian/internal/extract"
+	"github.com/wildcar/librarian/internal/index"
 	"github.com/wildcar/librarian/internal/intake"
 	"github.com/wildcar/librarian/internal/layers"
+	"github.com/wildcar/librarian/internal/mcpserver"
 	"github.com/wildcar/librarian/internal/pages"
 	"github.com/wildcar/librarian/internal/report"
 	"github.com/wildcar/librarian/internal/router"
@@ -54,6 +63,11 @@ const usage = `usage:
   librarian [--home DIR] docs   --account <id> [<sha256 prefix>]
   librarian [--home DIR] digest --account <id> [--limit N] [--workers N] [--model ID]
   librarian [--home DIR] show   --account <id> [--layer summary|essential|verbatim] <document id>
+  librarian [--home DIR] person add  --account <id> --code C --name "..." [--label L] [--alias A]... [--birth YYYY-MM-DD]
+  librarian [--home DIR] person list --account <id>
+  librarian [--home DIR] index  --account <id>
+  librarian [--home DIR] token create --account <id>
+  librarian [--home DIR] serve  [--addr 127.0.0.1:8090]
   librarian [--home DIR] text   --account <id> <sha256 prefix>
   librarian version
 
@@ -112,6 +126,16 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		defer c.Close()
 		fmt.Fprintf(out, "Аккаунт %s создан: %s\n", a.ID, a.Root())
 		return nil
+	case "serve":
+		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		addr := fs.String("addr", "127.0.0.1:8090", "listen address")
+		if err := fs.Parse(rest); err != nil {
+			return usageError{err.Error()}
+		}
+		return serve(ctx, *home, *addr, out)
+	case "token", "person", "index":
+		return accountAdmin(ctx, *home, cmd, rest, out)
 	case "ingest", "dupes", "stats", "extract", "verify", "text", "split", "docs", "digest", "show":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
@@ -303,6 +327,103 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return nil
 	}
 	return usageError{fmt.Sprintf("unknown command %q", cmd)}
+}
+
+// serve runs the MCP endpoint until the context ends.
+func serve(ctx context.Context, home, addr string, out io.Writer) error {
+	s := mcpserver.New(home)
+	defer s.Close()
+	srv := &http.Server{Addr: addr, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	go func() {
+		<-ctx.Done()
+		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(shutdown)
+	}()
+	fmt.Fprintf(out, "MCP: http://%s/mcp (Authorization: Bearer <токен аккаунта>)\n", addr)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+// stringList is a repeatable string flag.
+type stringList []string
+
+func (l *stringList) String() string     { return strings.Join(*l, ", ") }
+func (l *stringList) Set(v string) error { *l = append(*l, v); return nil }
+
+// accountAdmin handles token, person and index.
+func accountAdmin(ctx context.Context, home, cmd string, rest []string, out io.Writer) error {
+	sub := ""
+	if cmd != "index" {
+		if len(rest) == 0 {
+			return usageError{"expected: " + cmd + " <subcommand>"}
+		}
+		sub, rest = rest[0], rest[1:]
+	}
+	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	id := fs.String("account", "", "account id")
+	code := fs.String("code", "", "person code")
+	label := fs.String("label", "", "what the assistant sees, e.g. Папа")
+	name := fs.String("name", "", "full name")
+	birth := fs.String("birth", "", "birth date, YYYY-MM-DD")
+	var aliases stringList
+	fs.Var(&aliases, "alias", "a spelling found in documents (repeatable)")
+	if err := fs.Parse(rest); err != nil {
+		return usageError{err.Error()}
+	}
+	if *id == "" {
+		return usageError{"--account is required"}
+	}
+	a, err := account.Open(home, *id)
+	if err != nil {
+		return err
+	}
+	if cmd == "token" {
+		if sub != "create" {
+			return usageError{"expected: token create --account <id>"}
+		}
+		tok, err := a.NewToken()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Токен аккаунта %s (показывается один раз, прежний больше не действует):\n%s\n", a.ID, tok)
+		return nil
+	}
+	c, err := catalog.Open(a.CatalogPath())
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	switch {
+	case cmd == "person" && sub == "add":
+		p := catalog.Person{Code: *code, Label: *label, FullName: *name, Aliases: aliases, BirthDate: *birth}
+		if err := c.AddPerson(ctx, p, time.Now()); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Добавлен %s (%s). Чтобы привязать документы, запусти index.\n", p.Code, *name)
+	case cmd == "person" && sub == "list":
+		ps, err := c.Persons(ctx)
+		if err != nil {
+			return err
+		}
+		report.Persons(out, ps)
+	case cmd == "index":
+		rep, err := index.Run(ctx, c, time.Now())
+		if err != nil {
+			return err
+		}
+		un, err := c.Unlinked(ctx)
+		if err != nil {
+			return err
+		}
+		report.IndexRun(out, rep, un)
+	default:
+		return usageError{fmt.Sprintf("unknown %s subcommand %q", cmd, sub)}
+	}
+	return nil
 }
 
 // stage builds the extraction stage from the environment: poppler always,

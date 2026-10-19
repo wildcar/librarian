@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-20 · Fifth Go slice: persons, index, tokens, MCP server
+- What: catalog migration 7 (persons, doc_persons, doc dates, docs_fts), internal/index, account tokens, internal/mcpserver (stateless, per-account server), CLI person/index/token/serve.
+- Why: ADR-0004 front door; verified with a real MCP client and an isolation test with two accounts.
+- Files: internal/catalog/persons.go, internal/index/*, internal/account/token*.go, internal/mcpserver/*, internal/layers/layers.go, cmd/librarian/main.go, docs/adr/0004-*.md
+- Next: one-shot pipeline command, add_document, deployment behind HTTPS.
+
 ## 2026-10-20 · Fourth Go slice: essential text and de-identified summaries
 - What: internal/layers (rules, line-number removal, repeat and date/medical safeguards, leak and number checks, retry, flags), catalog migration 6 (texts), CLI digest/show.
 - Why: ADR-0005 in the service; sample: 69 documents, no leaks, 1 justified flag, $0.045.

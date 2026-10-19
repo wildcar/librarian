@@ -97,6 +97,30 @@ Ubuntu server on the owner's LAN is the first candidate.
   A file that arrives through `add_document` has no other source, so the service keeps
   that one.
 
+## In the service (2026-10-20)
+
+- **Token:** `lib_<account id>_<43 random characters>`, shown once by `librarian token
+  create`; only its sha256 is stored, in the account's directory; constant-time compare;
+  a new token replaces the old one. Every failure is the same 401.
+- **Server:** `librarian serve`; Streamable HTTP from the official go-sdk in stateless
+  mode, so there are no sessions to hijack across accounts. The middleware resolves the
+  account from the token and the handler gets that account's own `mcp.Server`, whose
+  tools are closed over that account's catalog; nothing on the request path can name
+  another account. `/health` is open.
+- **Tools:** `list_persons` (code, label, document count — no names), `search_documents`
+  (FTS5 over summaries and essential texts with prefix terms for Russian endings, bm25
+  ranking, person and date filters; returns summaries only), `get_document` (summary by
+  default, essential or verbatim on request). Source paths never leave the service:
+  they contain people's names.
+- **Persons:** `librarian person add` (code, label for the assistant, full name,
+  aliases, birth date); `librarian index` links documents by full name, alias or birth
+  date and dates documents from the summary's first sentence. A surname alone never
+  links: family members share it. The persons also feed the summary leak check.
+
+On the sample: 61 of 69 documents linked; the 8 others carry a misread handwritten
+name, no name at all, or are a device printout — they wait for the owner. 66 documents
+got a date; one is an ECG whose device clock said 1970, a date sanity check is due.
+
 ## Alternatives considered
 
 - **A local single-user tool** (the first sketch) — no isolation or remote access; does

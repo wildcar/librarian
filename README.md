@@ -30,6 +30,12 @@ go run ./cmd/librarian split   --account family   # cut originals into documents
 go run ./cmd/librarian docs    --account family
 go run ./cmd/librarian digest  --account family   # essential text + de-identified summary
 go run ./cmd/librarian show    --account family <document id> [--layer essential]
+
+# persons, index and the MCP server for assistants
+go run ./cmd/librarian person add --account family --code ИПС --label Папа --name "Иванов Петр Сергеевич" --alias "Иванов П.С." --birth 1950-02-01
+go run ./cmd/librarian index  --account family
+go run ./cmd/librarian token create --account family    # shown once
+go run ./cmd/librarian serve  --addr 127.0.0.1:8090     # MCP at http://127.0.0.1:8090/mcp, Authorization: Bearer <token>
 ```
 
 ## Docs

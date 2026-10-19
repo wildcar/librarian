@@ -10,6 +10,7 @@ import (
 
 	"github.com/wildcar/librarian/internal/catalog"
 	"github.com/wildcar/librarian/internal/extract"
+	"github.com/wildcar/librarian/internal/index"
 	"github.com/wildcar/librarian/internal/intake"
 	"github.com/wildcar/librarian/internal/layers"
 	"github.com/wildcar/librarian/internal/split"
@@ -106,6 +107,33 @@ func ShowLayer(w io.Writer, d catalog.Document, t catalog.Texts, layer string) {
 		return
 	}
 	fmt.Fprintf(w, "\n%s\n", t.Summary)
+}
+
+// Persons lists the account's persons.
+func Persons(w io.Writer, ps []catalog.Person) {
+	if len(ps) == 0 {
+		fmt.Fprintln(w, "Людей в аккаунте пока нет: person add --code ... --name ...")
+		return
+	}
+	for _, p := range ps {
+		extra := ""
+		if p.BirthDate != "" {
+			extra = ", род. " + p.BirthDate
+		}
+		if len(p.Aliases) > 0 {
+			extra += ", варианты: " + strings.Join(p.Aliases, "; ")
+		}
+		fmt.Fprintf(w, "%s  %s — %s%s; документов %d\n", p.Code, p.Label, p.FullName, extra, p.Documents)
+	}
+}
+
+// IndexRun prints the result of reindexing.
+func IndexRun(w io.Writer, r *index.Report, unlinked int) {
+	fmt.Fprintf(w, "Документов: %d, с датой %d, привязано к людям %d, без человека %d\n",
+		r.Documents, r.Dated, r.Linked, unlinked)
+	for _, k := range sortedKeys(r.Links) {
+		fmt.Fprintf(w, "  %s: %d\n", k, r.Links[k])
+	}
 }
 
 // SplitRun prints the result of one split run.
