@@ -55,7 +55,7 @@ Analysis combines two kinds of functions:
 - Catalog: SQLite per account (`modernc.org/sqlite`, pure Go).
 - OCR: `google/gemini-4-argon` through the router, pinned by `model_id` (primary), plus local tesseract as a second reading (ADR-0002).
 - Splitting: one whole-file `chat` call with `google/gemini-4-argon`, text rules as a cross-check (ADR-0003).
-- Text layers: original (reference only), verbatim OCR text, essential text, de-identified summary (ADR-0005).
+- Text layers: original (reference only), verbatim OCR text, essential text, de-identified summary; essential text and summary by `openai/gpt-6-luna` after rules, with checks (ADR-0005).
 - Bake-off harness for extractors: `tools/ocrbench/` (Python): OCR, splitting, text layers.
 
 ## Architecture (sketch)

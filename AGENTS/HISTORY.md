@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-19 · GPT-6 Luna for text layers
+- What: ADR-0005 records GPT-6 Luna for essential text and summaries, and why the layers stay out of the OCR call.
+- Why: owner's choice after the layers experiment.
+- Files: docs/adr/0005-text-layers-and-deidentified-summaries.md, AGENTS/SPEC.md, AGENTS/STATE.md, AGENTS/MEMORY.md
+- Next: first Go slice of the service.
+
 ## 2026-10-19 · Text layers experiment
 - What: tools/ocrbench/layers.py (line-number removal, de-identified summary, leak/number/loss checks, header safeguard); 4 models on 68 documents; ADR-0005 measurement section.
 - Why: measure ADR-0005 before building it: which model, cost, leaks, lost facts.

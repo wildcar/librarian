@@ -17,13 +17,12 @@ an MCP server from any AI assistant.
 - Tesseract text of all 156 sample pages is cached there for the splitting experiment.
 - Round 2 (2026-10-19, 12 newer models): Gemini 4 Argon 99%, handwriting 94%, $0.0097/page — now the primary OCR model (ADR-0002).
 - Service shape settled: ADR-0004 (accounts, persons, stream intake, MCP output; open questions resolved) and ADR-0005 (text layers, de-identified summaries by default).
-- Layers experiment done (`tools/ocrbench/layers.py`, 68 documents): GPT-6 Luna and Gemini 4 Argon lost no facts and leaked nothing; Luna costs $0.001 per document. Report: `library/_эксперименты/layers-2026-10/`.
+- Layers experiment done (`tools/ocrbench/layers.py`, 68 documents): GPT-6 Luna and Gemini 4 Argon lost no facts and leaked nothing; Luna chosen ($0.001 per document). Report: `library/_эксперименты/layers-2026-10/`.
 - Splitting experiment done (`tools/ocrbench/split.py`, ADR-0003 Accepted): Argon over the whole file 100%/100% on 27 files, also without handwritten dates; rules 93%/75% without them, decide weak. Report and proposed split of the folder: `library/_эксперименты/split-2026-10/`.
 
 ## Next
 
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
-- Owner: choose the model for essential text and summaries (recommended GPT-6 Luna; Argon for more detailed summaries).
 - First Go slice of the service: account storage root, intake of a folder → sha256 + MIME → per-account catalog → dedup report.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.

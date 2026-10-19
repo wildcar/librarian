@@ -1,6 +1,6 @@
 # ADR-0005: Text layers — essential text for analysis, de-identified summaries by default
 
-**Status:** Accepted (2026-10-19)
+**Status:** Accepted (2026-10-19; models chosen the same day after measurement)
 **Date:** 2026-10-19
 **Deciders:** wildcar
 **Scope:** extraction and output stages; sidecar format (`docs/filing.md`); MCP tools (ADR-0004)
@@ -86,15 +86,23 @@ Lessons that change the pipeline:
 - The number check must compare dates by meaning and accept superscript and
   space-separated forms, otherwise false alarms bury real ones.
 
-Recommendation (owner to confirm): GPT-6 Luna for both steps, after the rules, with
-the safeguard and both checks; Gemini 4 Argon for summaries if more detail is wanted.
+Chosen by the owner (2026-10-19): `openai/gpt-6-luna` for both steps, pinned by
+`model_id`, after the rules, with the safeguard and both checks. Gemini 4 Argon stays
+the option for more detailed summaries.
+
+Why not fold the layers into the OCR call: OCR runs per page, before splitting, so a
+summary written there would be a page summary, not a document summary; repeated
+headers are visible only across the document's pages; and asking the reader to judge
+what matters while reading risks the verbatim layer that everything else is derived
+from. Marking insignificant lines during OCR could be measured later on the OCR
+reference pages.
 
 ## Consequences
 
 - The default path to the assistant carries no names, numbers or addresses, at the cost
   of one summary call per document.
-- Two extra model passes per document (essential text, summary): about $0.001 per
-  document with GPT-6 Luna, $0.015 with Gemini 4 Argon (measured above).
+- Two extra model passes per document (essential text, summary) with GPT-6 Luna: about
+  $0.001 per document (measured above).
 - Keeping the verbatim text means improved cleaning or summarising can be rerun without
   paying for OCR again.
 - Not storing originals of link sources means verification depends on the source being
