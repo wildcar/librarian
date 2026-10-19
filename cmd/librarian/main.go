@@ -4,13 +4,16 @@
 //	librarian [--home DIR] ingest  --account <id> [--workers N] <folder>
 //	librarian [--home DIR] dupes   --account <id>
 //	librarian [--home DIR] stats   --account <id>
-//	librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run]
+//	librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run] [--no-check]
+//	librarian [--home DIR] verify  --account <id> [--limit N] [--workers N]
 //	librarian [--home DIR] text    --account <id> <sha256 prefix>
 //	librarian version
 //
 // The data root is --home or LIBRARIAN_HOME; every account lives in its own
 // directory under it. extract reads ROUTER_URL and ROUTER_TOKEN for the
-// model router, and LIBRARIAN_POPPLER_DIR when poppler is not on PATH.
+// model router, and LIBRARIAN_POPPLER_DIR when poppler is not on PATH;
+// extract and verify read LIBRARIAN_TESSERACT and LIBRARIAN_TESSDATA for the
+// tesseract second reading.
 package main
 
 import (
@@ -39,7 +42,8 @@ const usage = `usage:
   librarian [--home DIR] ingest --account <id> [--workers N] <folder>
   librarian [--home DIR] dupes  --account <id>
   librarian [--home DIR] stats  --account <id>
-  librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run]
+  librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run] [--no-check]
+  librarian [--home DIR] verify --account <id> [--limit N] [--workers N]
   librarian [--home DIR] text   --account <id> <sha256 prefix>
   librarian version
 
@@ -98,7 +102,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		defer c.Close()
 		fmt.Fprintf(out, "Аккаунт %s создан: %s\n", a.ID, a.Root())
 		return nil
-	case "ingest", "dupes", "stats", "extract", "text":
+	case "ingest", "dupes", "stats", "extract", "verify", "text":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
 		id := fs.String("account", "", "account id")
@@ -106,6 +110,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		limit := fs.Int("limit", 0, "extract: originals per run, 0 = all pending")
 		model := fs.String("model", extract.DefaultModel, "extract: OCR model id")
 		dryRun := fs.Bool("dry-run", false, "extract: count pages and estimate cost only")
+		noCheck := fs.Bool("no-check", false, "extract: skip the tesseract second reading")
 		if err := fs.Parse(rest); err != nil {
 			return usageError{err.Error()}
 		}
@@ -152,12 +157,29 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 				return err
 			}
 			report.Extraction(out, x)
-		case "extract":
-			pop := pages.Poppler{Dir: os.Getenv("LIBRARIAN_POPPLER_DIR")}
-			if err := pop.Check(); err != nil {
+			fl, err := c.FlaggedPages(ctx)
+			if err != nil {
 				return err
 			}
-			st := &extract.Stage{Catalog: c, Poppler: pop}
+			report.FlaggedPages(out, fl)
+		case "verify":
+			st, err := stage(ctx, c, true)
+			if err != nil {
+				return err
+			}
+			rep, err := st.Verify(ctx, extract.Options{Account: a.ID, Workers: *workers, Limit: *limit})
+			if rep != nil {
+				report.VerifyRun(out, rep)
+				if fl, ferr := c.FlaggedPages(ctx); ferr == nil {
+					report.FlaggedPages(out, fl)
+				}
+			}
+			return err
+		case "extract":
+			st, err := stage(ctx, c, !*noCheck && !*dryRun)
+			if err != nil {
+				return err
+			}
 			if !*dryRun {
 				rc, err := router.Dial(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
 				if err != nil {
@@ -190,4 +212,22 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return nil
 	}
 	return usageError{fmt.Sprintf("unknown command %q", cmd)}
+}
+
+// stage builds the extraction stage from the environment: poppler always,
+// tesseract when the second reading is wanted.
+func stage(ctx context.Context, c *catalog.Catalog, withCheck bool) (*extract.Stage, error) {
+	pop := pages.Poppler{Dir: os.Getenv("LIBRARIAN_POPPLER_DIR")}
+	if err := pop.Check(); err != nil {
+		return nil, err
+	}
+	st := &extract.Stage{Catalog: c, Poppler: pop}
+	if withCheck {
+		t := pages.Tesseract{Exe: os.Getenv("LIBRARIAN_TESSERACT"), Tessdata: os.Getenv("LIBRARIAN_TESSDATA")}
+		if err := t.Check(ctx); err != nil {
+			return nil, fmt.Errorf("%w (or run extract with --no-check)", err)
+		}
+		st.Checker = t
+	}
+	return st, nil
 }

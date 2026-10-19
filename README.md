@@ -25,6 +25,7 @@ export ROUTER_URL=https://<router>/mcp/ ROUTER_TOKEN=<token>
 go run ./cmd/librarian extract --account family --dry-run   # pages and cost estimate
 go run ./cmd/librarian extract --account family
 go run ./cmd/librarian text    --account family <sha256 prefix>
+go run ./cmd/librarian verify  --account family   # tesseract second reading for older pages
 ```
 
 ## Docs

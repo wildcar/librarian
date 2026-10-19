@@ -70,6 +70,29 @@ Findings that shape the decision:
    document that does not resolve goes to `Входящие/`.
 4. Every stored text keeps provenance: engine, model id, cost.
 
+## Second reading: how the check works (2026-10-20)
+
+Implemented in `internal/extract` (`librarian extract`, and `librarian verify` for
+pages read before). Tesseract reads the page rendered at 300 dpi; only its confident
+words count (confidence 80 or more, 4 letters or more). A page is judged only when it
+has at least 20 such words, which keeps handwriting out. It is flagged when
+
+- under 90% of the confident words occur in the Argon text (a large omission), or
+- 3 or more consecutive confident words are missing (a dropped line).
+
+Calibration on the 156 sample pages (112 judged as printed): the lowest real share was
+0.92 and the longest run of missing words was 1, so no page was flagged. Every missing
+word was a tesseract misreading («Минисжерство», «РО-интервалом» for PQ) except one:
+Argon had silently corrected a typo of the original («отсуствие» → «отсутствие»)
+despite the instruction to keep typos. Simulated omissions (lines removed from the
+Argon text, all tesseract words of 4+ letters treated as confident, so the figures
+are rough): one dropped long line is caught on about half of the pages, two lines on
+60–80%, a fifth of the page on about 80%. The check catches dropped lines and large
+gaps on printed pages; it does not catch a single wrong digit or a misread
+handwritten name — those stay with the rules of decision 3.
+
+Cost: no money, about 4 s of CPU per page.
+
 ## Consequences
 
 - About $0.01 per page: the sample folder costs about $1.5 to read in full, an
@@ -82,7 +105,8 @@ Findings that shape the decision:
   owner decided on 2026-10-18 that all pages, medical ones included, go through the
   router. Rejected for now: sending only pages tesseract could not read, or keeping
   medical sources local (surya on a GPU server).
-- Tesseract and its `rus` model become a runtime dependency (see `AGENTS/ENV.md`).
+- Tesseract and its `rus` model become a runtime dependency (see `AGENTS/ENV.md`);
+  `extract --no-check` runs without it, `verify` gives skipped pages the check later.
 - The bake-off is repeatable: new engines or models are added as another
   `run_*.py` (or another `--models` id) and scored against the same reference.
 

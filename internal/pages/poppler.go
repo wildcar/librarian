@@ -92,15 +92,29 @@ func (p Poppler) Render(ctx context.Context, pdf, dir string, longSide int) ([]s
 	if err != nil {
 		return nil, err
 	}
+	return p.render(ctx, bin, pdf, dir, "jpg",
+		"-gray", "-jpeg", "-jpegopt", "quality=88", "-scale-to", fmt.Sprint(longSide))
+}
+
+// RenderPNG writes one grayscale PNG per page at dpi: the input for the
+// tesseract second reading, which wants full resolution.
+func (p Poppler) RenderPNG(ctx context.Context, pdf, dir string, dpi int) ([]string, error) {
+	bin, err := p.bin("pdftoppm")
+	if err != nil {
+		return nil, err
+	}
+	return p.render(ctx, bin, pdf, dir, "png", "-gray", "-png", "-r", fmt.Sprint(dpi))
+}
+
+func (p Poppler) render(ctx context.Context, bin, pdf, dir, ext string, opts ...string) ([]string, error) {
 	prefix := filepath.Join(dir, "page")
 	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, bin, "-gray", "-jpeg", "-jpegopt", "quality=88",
-		"-scale-to", fmt.Sprint(longSide), pdf, prefix)
+	cmd := exec.CommandContext(ctx, bin, append(opts, pdf, prefix)...)
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("pdftoppm %s: %w: %s", pdf, err, strings.TrimSpace(stderr.String()))
 	}
-	files, err := filepath.Glob(prefix + "-*.jpg")
+	files, err := filepath.Glob(prefix + "-*." + ext)
 	if err != nil {
 		return nil, err
 	}

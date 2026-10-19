@@ -198,6 +198,65 @@ func TestChangedSourceIsNotRead(t *testing.T) {
 	}
 }
 
+// fakeReader is a second reader: it "sees" the words the fake OCR returns,
+// plus, on pages in extra, twenty sure words the OCR text does not contain.
+type fakeReader struct {
+	mu    sync.Mutex
+	calls int
+	extra map[int]bool // call numbers that see text the OCR missed
+}
+
+func (f *fakeReader) Read(ctx context.Context, image string) (pages.Reading, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	if _, err := os.Stat(image); err != nil {
+		return pages.Reading{}, fmt.Errorf("check image missing: %w", err)
+	}
+	var r pages.Reading
+	for range 25 {
+		r.Words = append(r.Words, pages.Word{Text: "распознанный", Conf: 95})
+	}
+	if f.extra[f.calls] {
+		for i := range 20 {
+			r.Words = append(r.Words, pages.Word{Text: fmt.Sprintf("пропущено%d", i), Conf: 95})
+		}
+	}
+	return r, nil
+}
+
+func TestSecondReadingFlagsDisagreement(t *testing.T) {
+	e := setup(t, map[string][]byte{"scan.pdf": makePDF("", "")})
+	rd := &fakeReader{extra: map[int]bool{2: true}}
+	e.stage.Checker = rd
+	rep := e.run(t, false)
+	if rep.PagesChecked != 2 || rep.PagesFlagged != 1 || len(rep.CheckErrors) != 0 {
+		t.Fatalf("checked=%d flagged=%d errors=%v, want 2 1 none", rep.PagesChecked, rep.PagesFlagged, rep.CheckErrors)
+	}
+	fl, err := e.cat.FlaggedPages(context.Background())
+	if err != nil || len(fl) != 1 || fl[0].Words != 45 || fl[0].Matched != 25 || !strings.Contains(fl[0].Missing, "пропущено0") {
+		t.Errorf("flagged pages = %+v, %v", fl, err)
+	}
+}
+
+func TestVerifyBackfillsOldPages(t *testing.T) {
+	e := setup(t, map[string][]byte{"scan.pdf": makePDF("", "", "")})
+	e.run(t, false) // no checker: pages stored without the second reading
+	rd := &fakeReader{extra: map[int]bool{}}
+	e.stage.Checker = rd
+	rep, err := e.stage.Verify(context.Background(), extract.Options{Workers: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.PagesChecked != 3 || rd.calls != 3 || rep.PagesFlagged != 0 {
+		t.Errorf("verify: checked=%d calls=%d flagged=%d, want 3 3 0", rep.PagesChecked, rd.calls, rep.PagesFlagged)
+	}
+	rep, _ = e.stage.Verify(context.Background(), extract.Options{Workers: 2})
+	if rep.Originals != 0 || rd.calls != 3 {
+		t.Errorf("second verify redid work: originals=%d calls=%d", rep.Originals, rd.calls)
+	}
+}
+
 func pngEncode(b *bytes.Buffer) error {
 	img := image.NewGray(image.Rect(0, 0, 3000, 1500)) // larger than LongSide: must be scaled
 	return png.Encode(b, img)

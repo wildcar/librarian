@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -64,6 +65,9 @@ type Report struct {
 	PagesSkipped   int // already stored by this pipeline version
 	CostUSD        float64
 	EstimateUSD    float64 // dry run only
+	PagesChecked   int     // pages that got the second reading
+	PagesFlagged   int     // of them, readings disagree
+	CheckErrors    []string
 	Errors         []string
 	Duration       time.Duration
 }
@@ -73,7 +77,133 @@ type Stage struct {
 	Catalog *catalog.Catalog
 	Poppler pages.Poppler
 	OCR     router.Chatter // may be nil in a dry run
+	Checker Reader         // second reading; nil skips it
 	Now     func() time.Time
+}
+
+// Reader is the second, independent reading of a page image (tesseract).
+type Reader interface {
+	Read(ctx context.Context, image string) (pages.Reading, error)
+}
+
+// CheckDPI is the resolution pages are rendered at for the second reading,
+// as in the bake-off where tesseract read 96% of printed facts.
+const CheckDPI = 300
+
+func (s *Stage) renderForCheck(ctx context.Context, pdf string, pageCount int) ([]string, error) {
+	dir, err := os.MkdirTemp("", "librarian-check-")
+	if err != nil {
+		return nil, err
+	}
+	imgs, err := s.Poppler.RenderPNG(ctx, pdf, dir, CheckDPI)
+	if err != nil {
+		os.RemoveAll(dir)
+		return nil, err
+	}
+	if len(imgs) != pageCount {
+		os.RemoveAll(dir)
+		return nil, fmt.Errorf("check render has %d pages, want %d", len(imgs), pageCount)
+	}
+	return imgs, nil
+}
+
+// check reads a page a second time, compares and stores the result.
+func (s *Stage) check(ctx context.Context, sha string, page int, image, primary string) (Check, error) {
+	r, err := s.Checker.Read(ctx, image)
+	if err != nil {
+		return Check{}, err
+	}
+	k := Compare(r, primary)
+	err = s.Catalog.SaveCheck(ctx, sha, page, catalog.PageCheck{
+		Engine: CheckEngine, Text: r.Text, Words: k.Words, Matched: k.Matched,
+		Missing: k.Missing, Run: k.MaxRun, Flagged: k.Flagged,
+	})
+	return k, err
+}
+
+// count adds one check outcome to the report; the caller holds the lock.
+func (s *Stage) count(rep *Report, sha string, page int, k Check, err error) {
+	if err != nil {
+		rep.CheckErrors = append(rep.CheckErrors, fmt.Sprintf("%s/%d: %v", sha[:12], page, err))
+		return
+	}
+	rep.PagesChecked++
+	if k.Flagged {
+		rep.PagesFlagged++
+	}
+}
+
+// Verify gives the second reading to OCR pages that do not have it yet.
+func (s *Stage) Verify(ctx context.Context, o Options) (*Report, error) {
+	start := time.Now()
+	if s.Checker == nil {
+		return nil, errors.New("verify: no second reader")
+	}
+	if o.Workers < 1 {
+		o.Workers = 1
+	}
+	origs, byOrig, err := s.Catalog.Unchecked(ctx, o.Limit)
+	if err != nil {
+		return nil, err
+	}
+	rep := &Report{Originals: len(origs)}
+	for _, p := range origs {
+		if err := ctx.Err(); err != nil {
+			return rep, err
+		}
+		path, err := readable(p)
+		if err != nil {
+			rep.CheckErrors = append(rep.CheckErrors, fmt.Sprintf("%s: %v", p.SHA256[:12], err))
+			continue
+		}
+		stored, err := s.Catalog.Pages(ctx, p.SHA256)
+		if err != nil {
+			return rep, err
+		}
+		text := map[int]string{}
+		for _, pg := range stored {
+			text[pg.Page] = pg.Text
+		}
+		images := map[int]string{}
+		tmp := "" // rendered pages of this original, removed after its checks
+		if p.MIME == "application/pdf" {
+			imgs, err := s.renderForCheck(ctx, path, len(stored))
+			if err != nil {
+				rep.CheckErrors = append(rep.CheckErrors, fmt.Sprintf("%s: %v", p.SHA256[:12], err))
+				continue
+			}
+			for i, im := range imgs {
+				images[i+1] = im
+			}
+			tmp = filepath.Dir(imgs[0])
+		} else {
+			images[1] = path
+		}
+		var (
+			mu  sync.Mutex
+			wg  sync.WaitGroup
+			sem = make(chan struct{}, o.Workers)
+		)
+		for _, n := range byOrig[p.SHA256] {
+			wg.Add(1)
+			sem <- struct{}{}
+			go func() {
+				defer wg.Done()
+				defer func() { <-sem }()
+				k, err := s.check(ctx, p.SHA256, n, images[n], text[n])
+				mu.Lock()
+				s.count(rep, p.SHA256, n, k, err)
+				mu.Unlock()
+			}()
+		}
+		wg.Wait()
+		if tmp != "" {
+			os.RemoveAll(tmp)
+		}
+		rep.Done++
+	}
+	rep.Duration = time.Since(start)
+	return rep, nil
 }
 
 // Run processes pending originals.
@@ -160,9 +290,10 @@ func (s *Stage) one(ctx context.Context, o Options, p catalog.Pending, rep *Repo
 	}
 
 	type task struct {
-		page  int
-		text  string // text layer, if meaningful
-		image []byte // OCR input otherwise
+		page       int
+		text       string // text layer, if meaningful
+		image      []byte // OCR input otherwise
+		checkImage string // full-resolution image for the second reading
 	}
 	var tasks []task
 
@@ -178,7 +309,7 @@ func (s *Stage) one(ctx context.Context, o Options, p catalog.Pending, rep *Repo
 				needOCR = true
 			}
 		}
-		var images []string
+		var images, checkImages []string
 		if needOCR && !o.DryRun {
 			dir, err := os.MkdirTemp("", "librarian-pages-")
 			if err != nil {
@@ -191,6 +322,15 @@ func (s *Stage) one(ctx context.Context, o Options, p catalog.Pending, rep *Repo
 			}
 			if len(images) != pageCount {
 				return catalog.ExtractError, 0, fmt.Sprintf("text layer has %d pages, render has %d", pageCount, len(images))
+			}
+			if s.Checker != nil {
+				checkImages, err = s.renderForCheck(ctx, path, pageCount)
+				if err != nil {
+					rep.CheckErrors = append(rep.CheckErrors, fmt.Sprintf("%s: %v", p.SHA256[:12], err))
+					checkImages = nil // OCR goes on; verify retries the check later
+				} else {
+					defer os.RemoveAll(filepath.Dir(checkImages[0]))
+				}
 			}
 		}
 		for i, t := range layers {
@@ -208,7 +348,11 @@ func (s *Stage) one(ctx context.Context, o Options, p catalog.Pending, rep *Repo
 				if err != nil {
 					return catalog.ExtractError, pageCount, err.Error()
 				}
-				tasks = append(tasks, task{page: n, image: img})
+				tk := task{page: n, image: img}
+				if checkImages != nil {
+					tk.checkImage = checkImages[i]
+				}
+				tasks = append(tasks, tk)
 			}
 		}
 	} else {
@@ -224,7 +368,7 @@ func (s *Stage) one(ctx context.Context, o Options, p catalog.Pending, rep *Repo
 			if err != nil {
 				return catalog.ExtractError, 1, err.Error()
 			}
-			tasks = append(tasks, task{page: 1, image: img})
+			tasks = append(tasks, task{page: 1, image: img, checkImage: path}) // tesseract reads the original
 		}
 	}
 	if o.DryRun {
@@ -289,6 +433,12 @@ func (s *Stage) one(ctx context.Context, o Options, p catalog.Pending, rep *Repo
 				rep.CostUSD += pg.CostUSD
 			} else {
 				rep.PagesTextLayer++
+			}
+			if pg.Method == "ocr" && s.Checker != nil && t.checkImage != "" {
+				mu.Unlock() // tesseract takes seconds; do not hold the lock
+				k, err := s.check(ctx, p.SHA256, t.page, t.checkImage, pg.Text)
+				mu.Lock()
+				s.count(rep, p.SHA256, t.page, k, err)
 			}
 		}()
 	}

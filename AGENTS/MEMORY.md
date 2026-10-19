@@ -34,6 +34,8 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - Essential text and summaries: `openai/gpt-6-luna` (user, 2026-10-19, ADR-0005). The layers are not folded into the OCR call: OCR is per page and precedes splitting, and the verbatim layer must stay a pure reading.
 - Text layers (2026-10-19): a model told to drop repeated headers drops every copy, and a running header may be the only place the patient's name is — always restore the first copy. Claude Haiku 5.5 leaked a clinic as an acronym and (earlier) invented a diagnosis; Gemini 3.1 Flash Lite invented a date — neither suits medical text.
 - Go pipeline OCR (pdftoppm grayscale, long side 2000, same prompt) matches the Python bench: 98% vs 99% facts, $1.39 for 156 pages (2026-10-19).
+- Gemini 4 Argon sometimes corrects typos of the original despite the prompt (seen once in 156 pages, 2026-10-20); the tesseract check surfaces such cases as missing words.
+- Second-reading thresholds were set on the sample (min real share 0.92, max missing run 1); revisit them on the first batch from another clinic.
 - Router `decide` replies carry cost in `cost_usd` (not `cost`).
 - Router provider `codex-oauth` was disabled on 2026-10-18; OpenAI models were reached through OpenRouter instead.
 - Router tools useful here: `chat` (text and images), `decide` (typed yes/no, choice, score questions with probabilities), `local/uvdoc` (unwarps photographed pages).

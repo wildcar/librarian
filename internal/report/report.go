@@ -28,6 +28,38 @@ func ExtractRun(w io.Writer, r *extract.Report, dryRun bool) {
 	for _, e := range r.Errors {
 		fmt.Fprintf(w, "  ошибка %s\n", e)
 	}
+	checks(w, r)
+}
+
+// VerifyRun prints the result of a second-reading backfill.
+func VerifyRun(w io.Writer, r *extract.Report) {
+	fmt.Fprintf(w, "Оригиналов: %d. Время: %s\n", r.Originals, r.Duration.Round(1e9))
+	checks(w, r)
+}
+
+func checks(w io.Writer, r *extract.Report) {
+	if r.PagesChecked > 0 || len(r.CheckErrors) > 0 {
+		fmt.Fprintf(w, "Вторая читка (tesseract): проверено страниц %d, расхождений %d\n", r.PagesChecked, r.PagesFlagged)
+	}
+	for _, e := range r.CheckErrors {
+		fmt.Fprintf(w, "  ошибка сверки %s\n", e)
+	}
+}
+
+// FlaggedPages lists pages where the two readings disagree.
+func FlaggedPages(w io.Writer, fl []catalog.Flagged) {
+	if len(fl) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "Страницы на проверку, чтения расходятся: %d\n", len(fl))
+	for _, f := range fl {
+		missing := f.Missing
+		if r := []rune(missing); len(r) > 120 {
+			missing = string(r[:120]) + "…"
+		}
+		fmt.Fprintf(w, "  %s стр. %d: найдено %d из %d уверенных слов tesseract, подряд пропало до %d; нет в тексте: %s\n",
+			f.SHA256[:12], f.Page, f.Matched, f.Words, f.Run, missing)
+	}
 }
 
 var statusLabels = map[string]string{

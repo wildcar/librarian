@@ -64,6 +64,15 @@ var schema = []string{
 		error   TEXT,
 		updated TEXT NOT NULL
 	);`,
+	// 3: the second, independent reading of OCR pages (ADR-0002).
+	`ALTER TABLE pages ADD COLUMN check_engine  TEXT;     -- tesseract; NULL = not checked yet
+	ALTER TABLE pages ADD COLUMN check_text    TEXT;
+	ALTER TABLE pages ADD COLUMN check_words   INTEGER;  -- confident words of the second reading
+	ALTER TABLE pages ADD COLUMN check_matched INTEGER;  -- of them, found in the primary text
+	ALTER TABLE pages ADD COLUMN check_missing TEXT;     -- confident words not found, space-separated
+	ALTER TABLE pages ADD COLUMN flagged       INTEGER NOT NULL DEFAULT 0;`,
+	// 4: longest run of consecutive confident words missing from the primary text.
+	`ALTER TABLE pages ADD COLUMN check_run INTEGER;`,
 }
 
 // Catalog is an open account catalog.

@@ -173,11 +173,11 @@ go vet ./... && gofmt -l .         # lint (gofmt must print nothing)
 Map of the codebase so an agent knows where things live.
 
 ```
-cmd/librarian/      CLI: account create, ingest, dupes, stats, extract, text
+cmd/librarian/      CLI: account create, ingest, dupes, stats, extract, verify, text
 internal/account/   per-account storage root; the only place that builds account paths
 internal/catalog/   per-account SQLite catalog: originals, sources, intake runs
 internal/intake/    folder intake: walk, skip non-documents, sha256, MIME, unchanged detection
-internal/pages/     poppler (pdftotext, pdftoppm) and image preparation for OCR
+internal/pages/     poppler (pdftotext, pdftoppm), tesseract, image preparation for OCR
 internal/router/    MCP client for model-router-mcp (the only way to reach models)
 internal/extract/   verbatim page text: PDF text layer or OCR through the router
 internal/report/    human-readable reports (Russian)

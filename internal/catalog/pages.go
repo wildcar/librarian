@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -214,4 +215,142 @@ func (c *Catalog) ExtractionSummary(ctx context.Context) (ExtractionStats, error
 		st.Errors = append(st.Errors, sha[:12]+": "+e)
 	}
 	return st, rows.Err()
+}
+
+// PageCheck is the second reading of one page and how it compares.
+type PageCheck struct {
+	Engine  string
+	Text    string
+	Words   int
+	Matched int
+	Missing []string
+	Run     int // longest run of consecutive missing confident words
+	Flagged bool
+}
+
+// SaveCheck stores the second reading of a page.
+func (c *Catalog) SaveCheck(ctx context.Context, sha string, page int, k PageCheck) error {
+	_, err := c.db.ExecContext(ctx, `
+		UPDATE pages SET check_engine = ?, check_text = ?, check_words = ?, check_matched = ?,
+		  check_missing = ?, check_run = ?, flagged = ? WHERE sha256 = ? AND page = ?`,
+		k.Engine, k.Text, k.Words, k.Matched, strings.Join(k.Missing, " "), k.Run, boolInt(k.Flagged), sha, page)
+	if err != nil {
+		return fmt.Errorf("save check %s/%d: %w", sha[:12], page, err)
+	}
+	return nil
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// Unchecked lists OCR pages without a second reading, grouped by original,
+// with the present sources of each original.
+func (c *Catalog) Unchecked(ctx context.Context, limit int) ([]Pending, map[string][]int, error) {
+	rows, err := c.db.QueryContext(ctx, `
+		SELECT p.sha256, p.page FROM pages p
+		WHERE p.method = 'ocr' AND p.check_engine IS NULL ORDER BY p.sha256, p.page`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unchecked: %w", err)
+	}
+	byOrig := map[string][]int{}
+	var order []string
+	for rows.Next() {
+		var sha string
+		var n int
+		if err := rows.Scan(&sha, &n); err != nil {
+			rows.Close()
+			return nil, nil, fmt.Errorf("unchecked: %w", err)
+		}
+		if _, ok := byOrig[sha]; !ok {
+			if limit > 0 && len(order) == limit {
+				continue
+			}
+			order = append(order, sha)
+		}
+		byOrig[sha] = append(byOrig[sha], n)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	var out []Pending
+	for _, sha := range order {
+		p := Pending{SHA256: sha}
+		err := c.db.QueryRowContext(ctx, "SELECT mime, size FROM originals WHERE sha256 = ?", sha).Scan(&p.MIME, &p.Size)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unchecked %s: %w", sha[:12], err)
+		}
+		srows, err := c.db.QueryContext(ctx,
+			"SELECT uri FROM sources WHERE sha256 = ? AND missing = 0 ORDER BY first_seen", sha)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unchecked %s: %w", sha[:12], err)
+		}
+		for srows.Next() {
+			var u string
+			if err := srows.Scan(&u); err != nil {
+				srows.Close()
+				return nil, nil, err
+			}
+			p.URIs = append(p.URIs, u)
+		}
+		srows.Close()
+		out = append(out, p)
+	}
+	return out, byOrig, nil
+}
+
+// Flagged is a page whose two readings disagree.
+type Flagged struct {
+	SHA256  string
+	Page    int
+	Words   int
+	Matched int
+	Run     int
+	Missing string
+}
+
+// FlaggedPages lists pages flagged by the second reading.
+func (c *Catalog) FlaggedPages(ctx context.Context) ([]Flagged, error) {
+	rows, err := c.db.QueryContext(ctx, `
+		SELECT sha256, page, check_words, check_matched, COALESCE(check_run, 0), COALESCE(check_missing, '')
+		FROM pages WHERE flagged = 1 ORDER BY sha256, page`)
+	if err != nil {
+		return nil, fmt.Errorf("flagged pages: %w", err)
+	}
+	defer rows.Close()
+	var out []Flagged
+	for rows.Next() {
+		var f Flagged
+		if err := rows.Scan(&f.SHA256, &f.Page, &f.Words, &f.Matched, &f.Run, &f.Missing); err != nil {
+			return nil, fmt.Errorf("flagged pages: %w", err)
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// CheckShares returns, for every checked OCR page, its confident-word count
+// and matched count: the data the flag threshold is calibrated on.
+func (c *Catalog) CheckShares(ctx context.Context) ([][4]any, error) {
+	rows, err := c.db.QueryContext(ctx, `
+		SELECT sha256, page, check_words, check_matched FROM pages
+		WHERE check_engine IS NOT NULL ORDER BY sha256, page`)
+	if err != nil {
+		return nil, fmt.Errorf("check shares: %w", err)
+	}
+	defer rows.Close()
+	var out [][4]any
+	for rows.Next() {
+		var sha string
+		var page, words, matched int
+		if err := rows.Scan(&sha, &page, &words, &matched); err != nil {
+			return nil, fmt.Errorf("check shares: %w", err)
+		}
+		out = append(out, [4]any{sha, page, words, matched})
+	}
+	return out, rows.Err()
 }

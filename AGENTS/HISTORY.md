@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-20 · Tesseract second reading
+- What: internal/pages/tesseract.go (TSV with confidences), internal/extract/check.go (share + missing-run rule), migrations 3-4, `verify` command, flagged pages in `stats`; ADR-0002 section on the check.
+- Why: ADR-0002 decision 2; calibrated on 156 pages: 0 false flags, one Argon typo correction found.
+- Files: internal/pages/*, internal/extract/*, internal/catalog/*, internal/report/report.go, cmd/librarian/main.go, docs/adr/0002-ocr-engine.md
+- Next: splitting into documents (ADR-0003) in Go.
+
 ## 2026-10-19 · Second Go slice: verbatim page text
 - What: internal/pages (poppler, image prep), internal/router (MCP client), internal/extract; catalog migration 2 (pages, extraction); CLI extract/text; tests with a fake router.
 - Why: OCR stage of ADR-0002 in the service; run on the sample: 156 pages, $1.39, 98% facts.

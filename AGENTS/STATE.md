@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- Tesseract second reading in the Go pipeline (ADR-0002): `extract` checks new OCR pages, `verify` backfills; 156 sample pages checked, 0 flagged (lowest share 0.92, longest missing run 1).
 - Second Go slice done: `librarian extract` — text layer or OCR (Gemini 4 Argon via router) per page, stored in the account catalog. Sample account: 156 pages OCR'd for $1.39 in 10 min, 0 errors; facts score 98% vs 99% in the bench (the difference is one rotated handwritten page).
 - First Go slice done: `librarian account create | ingest | dupes | stats`; per-account SQLite catalog; tested (unit + end-to-end on the sample folder).
 - OCR bake-off done on 14 sample pages (`tools/ocrbench/`, ADR-0002 Accepted): tesseract 78% (9% on handwriting), Gemini 3.1 Flash Lite 93%.
@@ -40,6 +41,7 @@ an MCP server from any AI assistant.
 
 ## Deferred
 
+- Flagged pages are listed by `stats`; they go to the inbox once the inbox exists.
 - Tesseract second reading (ADR-0002 decision 2) is not in the Go pipeline yet.
 - `extract` processes originals one after another, pages in parallel; parallelism across originals if volume needs it.
 - `go test -race`: needs cgo/gcc, run it on the Ubuntu server.

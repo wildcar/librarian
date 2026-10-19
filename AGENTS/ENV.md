@@ -41,6 +41,7 @@ go build -o $LOCALAPPDATA/librarian/bin/librarian.exe ./cmd/librarian
 LIBRARIAN_HOME=$LOCALAPPDATA/librarian/home librarian ingest --account sergey <folder>
 set -a; . ./.env; set +a      # ROUTER_URL, ROUTER_TOKEN
 LIBRARIAN_POPPLER_DIR=<poppler bin> librarian extract --account sergey [--dry-run] --workers 6
+LIBRARIAN_TESSERACT=$LOCALAPPDATA/Programs/Tesseract-OCR/tesseract.exe LIBRARIAN_TESSDATA=$LOCALAPPDATA/librarian/tessdata librarian verify --account sergey --workers 6
 ```
 
 ## Host-specific quirks
