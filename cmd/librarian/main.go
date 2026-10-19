@@ -6,6 +6,8 @@
 //	librarian [--home DIR] stats   --account <id>
 //	librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run] [--no-check]
 //	librarian [--home DIR] verify  --account <id> [--limit N] [--workers N]
+//	librarian [--home DIR] split   --account <id> [--limit N] [--model ID]
+//	librarian [--home DIR] docs    --account <id> [<sha256 prefix>]
 //	librarian [--home DIR] text    --account <id> <sha256 prefix>
 //	librarian version
 //
@@ -32,6 +34,7 @@ import (
 	"github.com/wildcar/librarian/internal/pages"
 	"github.com/wildcar/librarian/internal/report"
 	"github.com/wildcar/librarian/internal/router"
+	"github.com/wildcar/librarian/internal/split"
 )
 
 // version is overridden at build time: -ldflags "-X main.version=..."
@@ -44,6 +47,8 @@ const usage = `usage:
   librarian [--home DIR] stats  --account <id>
   librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run] [--no-check]
   librarian [--home DIR] verify --account <id> [--limit N] [--workers N]
+  librarian [--home DIR] split  --account <id> [--limit N] [--model ID]
+  librarian [--home DIR] docs   --account <id> [<sha256 prefix>]
   librarian [--home DIR] text   --account <id> <sha256 prefix>
   librarian version
 
@@ -102,7 +107,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		defer c.Close()
 		fmt.Fprintf(out, "Аккаунт %s создан: %s\n", a.ID, a.Root())
 		return nil
-	case "ingest", "dupes", "stats", "extract", "verify", "text":
+	case "ingest", "dupes", "stats", "extract", "verify", "text", "split", "docs":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
 		id := fs.String("account", "", "account id")
@@ -162,6 +167,39 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 				return err
 			}
 			report.FlaggedPages(out, fl)
+			bs, nd, notes, err := c.SplitSummary(ctx)
+			if err != nil {
+				return err
+			}
+			report.SplitState(out, bs, nd, notes)
+		case "split":
+			rc, err := router.Dial(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
+			if err != nil {
+				return err
+			}
+			defer rc.Close()
+			model := *model
+			if model == extract.DefaultModel {
+				model = split.DefaultModel
+			}
+			st := &split.Stage{Catalog: c, Model: rc}
+			rep, err := st.Run(ctx, split.Options{Account: a.ID, Model: model, Limit: *limit})
+			if rep != nil {
+				report.SplitRun(out, rep)
+			}
+			return err
+		case "docs":
+			sha := ""
+			if fs.NArg() == 1 {
+				if sha, err = c.ResolveSHA(ctx, fs.Arg(0)); err != nil {
+					return err
+				}
+			}
+			d, err := c.Documents(ctx, sha)
+			if err != nil {
+				return err
+			}
+			report.Documents(out, d)
 		case "verify":
 			st, err := stage(ctx, c, true)
 			if err != nil {

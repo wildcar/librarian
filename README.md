@@ -26,6 +26,8 @@ go run ./cmd/librarian extract --account family --dry-run   # pages and cost est
 go run ./cmd/librarian extract --account family
 go run ./cmd/librarian text    --account family <sha256 prefix>
 go run ./cmd/librarian verify  --account family   # tesseract second reading for older pages
+go run ./cmd/librarian split   --account family   # cut originals into documents
+go run ./cmd/librarian docs    --account family
 ```
 
 ## Docs

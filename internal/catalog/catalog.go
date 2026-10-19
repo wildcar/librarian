@@ -73,6 +73,26 @@ var schema = []string{
 	ALTER TABLE pages ADD COLUMN flagged       INTEGER NOT NULL DEFAULT 0;`,
 	// 4: longest run of consecutive confident words missing from the primary text.
 	`ALTER TABLE pages ADD COLUMN check_run INTEGER;`,
+	// 5: documents cut out of originals (ADR-0003) and the split state.
+	`CREATE TABLE documents (
+		id         TEXT PRIMARY KEY,         -- <sha256[:16]>-<first page>: stable while the cut holds
+		sha256     TEXT NOT NULL REFERENCES originals(sha256),
+		first_page INTEGER NOT NULL,
+		last_page  INTEGER NOT NULL,
+		created    TEXT NOT NULL
+	);
+	CREATE INDEX documents_sha256 ON documents(sha256);
+	CREATE TABLE split (
+		sha256        TEXT PRIMARY KEY REFERENCES originals(sha256),
+		status        TEXT NOT NULL,        -- done | review | error
+		method        TEXT NOT NULL,        -- single | model
+		engine        TEXT NOT NULL,        -- the model that answered, or "-"
+		cost_usd      REAL NOT NULL DEFAULT 0,
+		disagreements TEXT,                 -- strong rules the model contradicted
+		error         TEXT,
+		pipeline      INTEGER NOT NULL,
+		updated       TEXT NOT NULL
+	);`,
 }
 
 // Catalog is an open account catalog.

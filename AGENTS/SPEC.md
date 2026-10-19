@@ -91,7 +91,7 @@ Intake
 Analysis
 
 6. ✅ Verbatim page text (`librarian extract`): the PDF text layer where it has at least 100 letters, otherwise the page rendered by `pdftoppm` (grayscale JPEG, long side 2000) and read by `google/gemini-4-argon` through the router; images (JPEG, PNG, TIFF, BMP, GIF, WebP) are scaled the same way. The source is re-hashed before reading; a changed file is an error, not a silent re-read. Pages are stored one by one, so a failed page is retried alone. Every OCR page also gets the tesseract second reading at 300 dpi; a printed page whose confident tesseract words are under 90% present in the Argon text, or that misses 3 consecutive ones, is flagged for the owner (`librarian verify` backfills, `stats` lists flagged pages). ⏳ Then: other types (DOCX, plain text); flagged pages into the inbox. Original contract: a vision model via the router plus tesseract, disagreement on print flags the page (ADR-0002).
-7. ⏳ Split multi-document scans into logical documents by page ranges: a whole-file model call plus text rules as a cross-check (ADR-0003).
+7. ✅ Split originals into documents (`librarian split`, `librarian docs`): one-page originals directly; others by one `chat` call with `google/gemini-4-argon` over the page text (windows of 30 pages, seams by rules); strong rules that contradict the model send the file to review. Documents get stable ids `<sha256[:16]>-<first page>` (ADR-0003).
 7a. ⏳ Reassemble documents whose pages are not contiguous and restore page order.
 8. ⏳ Extract the document date from the document content (rules first, model second).
 9. ⏳ Resolve persons named in a document against the account's persons (aliases, birth date); names read from handwriting are never stored as read.
@@ -123,7 +123,7 @@ AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
   owner's Ubuntu server on the LAN. Development runs on the Windows dev machine.
 - Storage: one directory per account (catalog, file cache, archive tree). The catalog
   database is never inside a folder that a sync client rewrites.
-- Today: a CLI (`librarian account create | ingest | dupes | stats | extract | text`); data root from `--home` or `LIBRARIAN_HOME`; `extract` needs `ROUTER_URL`, `ROUTER_TOKEN` and poppler (`LIBRARIAN_POPPLER_DIR` when it is not on PATH).
+- Today: a CLI (`librarian account create | ingest | dupes | stats | extract | verify | split | docs | text`); data root from `--home` or `LIBRARIAN_HOME`; `extract` needs `ROUTER_URL`, `ROUTER_TOKEN` and poppler (`LIBRARIAN_POPPLER_DIR` when it is not on PATH).
 
 ## Current state
 
@@ -131,6 +131,7 @@ AGENTS/          agent docs: SPEC, STATE, HISTORY, MEMORY, ENV
 - ✅ Measured choices: OCR engine (ADR-0002), splitting method (ADR-0003), text layer model (ADR-0005).
 - ✅ First Go slice: account storage, per-account SQLite catalog, folder intake, duplicate and stats reports.
 - ✅ Second Go slice: verbatim page text through the text layer or OCR via the router, stored per page in the account catalog; tesseract second reading with flags.
+- ✅ Third Go slice: splitting originals into documents, documents table in the catalog.
 - ⏳ Everything in Functional requirements.
 
 See `AGENTS/STATE.md` for the live Now / Next snapshot.

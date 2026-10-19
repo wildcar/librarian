@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-20 · Third Go slice: splitting into documents
+- What: internal/split (rules port, LCS ratio, whole-file model call with windows, review on strong disagreement), catalog migration 5 (documents, split), CLI split/docs, calibration test.
+- Why: ADR-0003 in the service; sample: 100% vs hand labels after making two unreliable rules weak.
+- Files: internal/split/*, internal/catalog/documents.go, internal/catalog/catalog.go, internal/report/report.go, cmd/librarian/main.go, docs/adr/0003-*.md
+- Next: essential text and summaries (ADR-0005) in Go.
+
 ## 2026-10-20 · Tesseract second reading
 - What: internal/pages/tesseract.go (TSV with confidences), internal/extract/check.go (share + missing-run rule), migrations 3-4, `verify` command, flagged pages in `stats`; ADR-0002 section on the check.
 - Why: ADR-0002 decision 2; calibrated on 156 pages: 0 false flags, one Argon typo correction found.

@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- Third Go slice done: `librarian split` / `docs`; sample: 69 documents, 100% against hand labels, $0.24; two rules made weak after calibration.
 - Tesseract second reading in the Go pipeline (ADR-0002): `extract` checks new OCR pages, `verify` backfills; 156 sample pages checked, 0 flagged (lowest share 0.92, longest missing run 1).
 - Second Go slice done: `librarian extract` — text layer or OCR (Gemini 4 Argon via router) per page, stored in the account catalog. Sample account: 156 pages OCR'd for $1.39 in 10 min, 0 errors; facts score 98% vs 99% in the bench (the difference is one rotated handwritten page).
 - First Go slice done: `librarian account create | ingest | dupes | stats`; per-account SQLite catalog; tested (unit + end-to-end on the sample folder).
@@ -26,7 +27,7 @@ an MCP server from any AI assistant.
 ## Next
 
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
-- Next Go slice: splitting scans into documents (ADR-0003) over the stored page text, documents table in the catalog.
+- Next Go slice: essential text and de-identified summaries per document with GPT-6 Luna (ADR-0005).
 - Then: essential text and summaries with GPT-6 Luna (ADR-0005), then the MCP server.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.
@@ -41,6 +42,7 @@ an MCP server from any AI assistant.
 
 ## Deferred
 
+- Split review files have no inbox yet; `stats` lists them.
 - Flagged pages are listed by `stats`; they go to the inbox once the inbox exists.
 - Tesseract second reading (ADR-0002 decision 2) is not in the Go pipeline yet.
 - `extract` processes originals one after another, pages in parallel; parallelism across originals if volume needs it.

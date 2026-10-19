@@ -11,6 +11,7 @@ import (
 	"github.com/wildcar/librarian/internal/catalog"
 	"github.com/wildcar/librarian/internal/extract"
 	"github.com/wildcar/librarian/internal/intake"
+	"github.com/wildcar/librarian/internal/split"
 )
 
 // ExtractRun prints the result of one extraction run.
@@ -59,6 +60,51 @@ func FlaggedPages(w io.Writer, fl []catalog.Flagged) {
 		}
 		fmt.Fprintf(w, "  %s стр. %d: найдено %d из %d уверенных слов tesseract, подряд пропало до %d; нет в тексте: %s\n",
 			f.SHA256[:12], f.Page, f.Matched, f.Words, f.Run, missing)
+	}
+}
+
+// SplitRun prints the result of one split run.
+func SplitRun(w io.Writer, r *split.Report) {
+	fmt.Fprintf(w, "Оригиналов: %d, документов в них: %d (одностраничных оригиналов %d). На проверку: %d, с ошибкой: %d. Модель стоила $%.3f. Время: %s\n",
+		r.Originals, r.Documents, r.Single, r.Review, r.Failed, r.CostUSD, r.Duration.Round(1e9))
+	for _, n := range r.Notes {
+		fmt.Fprintf(w, "  %s\n", n)
+	}
+}
+
+// SplitState prints split totals for the catalog.
+func SplitState(w io.Writer, byStatus map[string]int, docs int, notes []string) {
+	if len(byStatus) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "Разбивка на документы: документов %d; оригиналов готово %d, на проверку %d, с ошибкой %d\n",
+		docs, byStatus["done"], byStatus["review"], byStatus["error"])
+	for _, n := range notes {
+		fmt.Fprintf(w, "  %s\n", n)
+	}
+}
+
+// Documents lists documents with their pages and first line.
+func Documents(w io.Writer, docs []catalog.DocumentRow) {
+	if len(docs) == 0 {
+		fmt.Fprintln(w, "Документов пока нет.")
+		return
+	}
+	last := ""
+	for _, d := range docs {
+		if d.Source != last {
+			fmt.Fprintf(w, "%s\n", Path(d.Source))
+			last = d.Source
+		}
+		pages := fmt.Sprintf("стр. %d", d.FirstPage)
+		if d.LastPage > d.FirstPage {
+			pages = fmt.Sprintf("стр. %d–%d", d.FirstPage, d.LastPage)
+		}
+		mark := ""
+		if d.Status == "review" {
+			mark = " [на проверку]"
+		}
+		fmt.Fprintf(w, "  %s  %-11s %s%s\n", d.ID, pages, d.FirstLine, mark)
 	}
 }
 

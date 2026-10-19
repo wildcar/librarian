@@ -65,6 +65,25 @@ Findings:
 4. Reassembling non-contiguous documents and restoring page order are a separate,
    later step.
 
+## In the service (2026-10-20)
+
+`internal/split` (`librarian split`, `librarian docs`). One `chat` call per file with
+the no-date prompt; files longer than 30 pages go in windows and the seams are decided
+by the rules. A strong rule that contradicts the model sends the file to review; the
+model's cut is kept meanwhile.
+
+Calibration of the rules on the Go pipeline's own page text (`TestCalibrateRules`,
+run with the catalog and the hand labels): five rules were right every time and stay
+strong — running page number, printout after printout, protocol after its printouts,
+page starting mid-document, title after an ending. Two were not and became weak: the
+same case or contract number (4 right, 3 wrong) and the same letterhead (11 right, 3
+wrong) — several payment details under one contract, or several recommendations on
+one clinic's form, are separate documents. With them strong, 4 of 27 files went to
+review for nothing.
+
+Result on the sample: 69 documents, precision and recall 100% on every unambiguous
+boundary against the hand labels, no file sent to review, $0.24 for the folder.
+
 ## Consequences
 
 - About $0.0013 per page on top of OCR (ADR-0002); the whole pipeline so far is about
