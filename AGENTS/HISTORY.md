@@ -4,6 +4,13 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-20 · Ubuntu server as dev and prod host
+- What: installed Go 1.27.3, poppler, tesseract with tessdata_best rus; build, vet, gofmt, tests and -race pass; service user, data dir and env files for router tokens.
+- Why: owner moved dev to the server and chose it for the service at lib.wildcar.ru.
+- Files: AGENTS/ENV.md, AGENTS/STATE.md
+- Fixes-on-the-fly: dropped stale STATE items (tesseract check already shipped, -race now runs, "where it runs" resolved: no GPU).
+- Next: owner fills tokens; sample run on the server; systemd unit and Apache vhost.
+
 ## 2026-10-20 · Fifth Go slice: persons, index, tokens, MCP server
 - What: catalog migration 7 (persons, doc_persons, doc dates, docs_fts), internal/index, account tokens, internal/mcpserver (stateless, per-account server), CLI person/index/token/serve.
 - Why: ADR-0004 front door; verified with a real MCP client and an isolation test with two accounts.

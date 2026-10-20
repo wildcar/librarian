@@ -5,12 +5,23 @@ Update whenever a new tool, credential, or host-specific quirk is learned.
 
 ## Host
 
-- **Dev**: Windows 10, PowerShell 7 + Git Bash, repo at `C:\Users\sergey_e\D\repo\librarian`.
-- **Prod**: not decided. Candidate: Ubuntu server on the LAN, reachable from the internet.
-- Archive for experiments: `C:\Users\sergey_e\D\personal\library\` (empty as of 2026-10-18).
-- Sample source (read only, Nextcloud-synced, can be slow): `C:\Users\sergey_e\D\personal\nextcloud\document\Сережа\Папа\Сканы заключений\`.
+- **Dev and prod**: one Ubuntu 24.04 server `homesrv` (x86_64, 4 cores, 7.6 GB RAM, no GPU — surya stays off), since 2026-10-20. Repo at `/home/wildcar/repo/librarian`.
+- Public name of the service: `lib.wildcar.ru` (DNS already points here via `wildcar.ru`). Apache owns ports 80/443 with Let's Encrypt certificates; other MCP services on this host (rtorrent-mcp, yt-dlp-mcp) run as systemd units.
+- model-router-mcp runs on another server: `https://mr.wildcar.org/mcp/`.
+- Former dev: Windows 10, repo at `C:\Users\sergey_e\D\repo\librarian`; its quirks are kept below for `tools/ocrbench`.
+- Archive for experiments on Windows: `C:\Users\sergey_e\D\personal\library\` (only `_эксперименты` reports with personal data, outside the repo).
+- Sample source (read only, Nextcloud-synced): `<Nextcloud>/document/Сережа/Папа/Сканы заключений/`; Nextcloud (`nc.wildcar.ru`) runs on this same server.
 
 ## Tools
+
+### Server (dev and prod)
+
+- Go 1.27.3 from go.dev in `/usr/local/go`, linked into `/usr/local/bin` (apt has only 1.22; module floor `go 1.26.0`). gcc from `build-essential`, so `go test -race` works.
+- poppler-utils 24.02 (`pdftotext`, `pdftoppm` on PATH; `LIBRARIAN_POPPLER_DIR` not needed).
+- tesseract 5.3.4 (apt); language data `rus`, `eng` from tessdata_best and `osd` in `/usr/local/share/tessdata` — set `LIBRARIAN_TESSDATA` to it (apt tessdata has no `rus`).
+- Service user `librarian` (system, nologin); data root `/var/lib/librarian`; dev data root `~/librarian-dev`.
+
+### Former dev (Windows)
 
 - Go 1.27 (module floor `go 1.26.0`, raised by modernc.org/sqlite). No C compiler on dev, so `go test -race` is unavailable here.
 - poppler 25.07 (winget `oschwartz10612.Poppler`), not on PATH: `%LOCALAPPDATA%/Microsoft/WinGet/Packages/oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe/poppler-25.07.0/Library/bin` — set `LIBRARIAN_POPPLER_DIR` to it for `extract` and for the extract tests (they skip without it).
@@ -25,11 +36,23 @@ Update whenever a new tool, credential, or host-specific quirk is learned.
 
 ## Credentials & secrets
 
-- `ROUTER_URL` and `ROUTER_TOKEN` live in the repo's `.env` (gitignored). Pointers only, never values here.
+- Dev: `ROUTER_URL`, `ROUTER_TOKEN` and paths in the repo's `.env` (gitignored, mode 600).
+- Service: `/etc/librarian/librarian.env` (root:librarian 640, systemd EnvironmentFile, no `$VAR` expansion); edit with `sudoedit`.
+- Server and dev use separate router tokens. Pointers only, never values here.
 
 ## Commands cheat-sheet
 
-### Dev
+### Server
+
+```
+set -a; . ./.env; set +a      # LIBRARIAN_HOME, ROUTER_URL, ROUTER_TOKEN, tesseract paths
+go build ./... && go vet ./... && gofmt -l . && go test ./... && go test -race ./...
+go build -o bin/librarian ./cmd/librarian
+bin/librarian ingest --account sergey <folder>
+bin/librarian extract --account sergey [--dry-run] --workers 6
+```
+
+### Former dev (Windows)
 
 ```
 go build ./...
@@ -46,7 +69,7 @@ LIBRARIAN_TESSERACT=$LOCALAPPDATA/Programs/Tesseract-OCR/tesseract.exe LIBRARIAN
 
 ## Host-specific quirks
 
-### Dev
+### Former dev (Windows)
 
 - uv here fails to create the Python minor-version link (`Missing expected target directory`), but the venv still works; set `UV_PYTHON_INSTALL_DIR=%LOCALAPPDATA%/librarian/uv-python`.
 - torch and paddle in one process: import torch first, otherwise `shm.dll` fails to load.

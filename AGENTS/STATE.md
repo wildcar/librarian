@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- Ubuntu server `homesrv` is now dev and prod: Go 1.27.3, poppler, tesseract (tessdata_best rus) installed; build, vet, gofmt, tests and `go test -race` pass; user `librarian`, `/var/lib/librarian`, env files `/etc/librarian/librarian.env` and `.env` prepared (router tokens to be filled by the owner).
 - Fifth Go slice done: persons, `index`, tokens, `librarian serve` with list_persons / search_documents / get_document; checked with a real MCP client; 61 of 69 sample documents linked to ЕБВ.
 - Fourth Go slice done: `librarian digest` / `show`; sample: 69 documents, 0 leaks, 1 flagged summary (a computed «28 дней»), $0.045.
 - Third Go slice done: `librarian split` / `docs`; sample: 69 documents, 100% against hand labels, $0.24; two rules made weak after calibration.
@@ -30,7 +31,8 @@ an MCP server from any AI assistant.
 
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
 - One command that runs the whole pipeline for new files (ingest → extract → split → digest → index), and `add_document` over MCP.
-- Deploy on the Ubuntu server behind HTTPS so an assistant can connect from anywhere.
+- Owner fills router tokens; then run the sample through the pipeline on the server (from the Nextcloud folder, not a copy of the Windows catalog).
+- Deploy `librarian serve` as a systemd unit on 127.0.0.1:8090 behind Apache at `https://lib.wildcar.ru` (certbot, no proxy buffering for Streamable HTTP).
 - Inbox for the owner: unlinked documents, flagged summaries, split reviews.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.
@@ -41,7 +43,6 @@ an MCP server from any AI assistant.
 - Taxonomy: domain and leaf names — start from the sample folders?
 - Person codes: three initials always? Namesakes and household documents (`Семья`)?
 - PDF copies for cloud sources: `none` by default, or cut and keep locally too?
-- Where the librarian runs: dev machine or the Ubuntu server (a GPU there would make surya viable).
 
 ## Deferred
 
@@ -50,8 +51,6 @@ an MCP server from any AI assistant.
 - Flagged summaries and split reviews wait for the inbox.
 - Split review files have no inbox yet; `stats` lists them.
 - Flagged pages are listed by `stats`; they go to the inbox once the inbox exists.
-- Tesseract second reading (ADR-0002 decision 2) is not in the Go pipeline yet.
 - `extract` processes originals one after another, pages in parallel; parallelism across originals if volume needs it.
-- `go test -race`: needs cgo/gcc, run it on the Ubuntu server.
 - Go tests and linter beyond `go vet` / `gofmt`: no Go logic yet. `tools/ocrbench` has no tests (throwaway harness).
 - Router provider `codex-oauth` disabled; GPT models via codex subscription not benchmarked.
