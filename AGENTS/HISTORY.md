@@ -4,6 +4,13 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-21 · Service deployed at lib.wildcar.ru
+- What: systemd unit, Apache HTTPS proxy with Let's Encrypt and a reload hook, account token; copies in deploy/.
+- Why: assistants connect from anywhere (STATE Next).
+- Files: deploy/*, AGENTS/ENV.md, AGENTS/STATE.md
+- Fixes-on-the-fly: ProxyPreserveHost Off — the MCP SDK refused the public Host header.
+- Next: connect a real assistant; surname+year person matching; one-shot pipeline command.
+
 ## 2026-10-21 · Sample run on the server; tesseract thread fix
 - What: whole pipeline on the sample account from Nextcloud ($1.68 total, 68 documents, 60 linked); tesseract runs with OMP_THREAD_LIMIT=1; read-only ACLs for the service user.
 - Why: first run hung for an hour — OpenMP threads of parallel tesseract processes starved 4 cores.

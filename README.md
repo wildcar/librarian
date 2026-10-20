@@ -43,3 +43,4 @@ go run ./cmd/librarian serve  --addr 127.0.0.1:8090     # MCP at http://127.0.0.
 - `AGENTS.md` — entrypoint for AI agents working in this repo (workflow, rules, doc map).
 - `AGENTS/SPEC.md` — functional specification.
 - `docs/adr/` — architecture decisions.
+- `deploy/` — deployment on the server; the service runs at `https://lib.wildcar.ru/mcp`.

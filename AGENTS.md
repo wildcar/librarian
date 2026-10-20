@@ -30,6 +30,7 @@ librarian — a pedantic librarian as a service: isolated accounts, each keeping
 | `docs/` | Domain / reference docs. Read on demand when a task touches that area. |
 | `docs/filing.md` | Archive layout, file naming, sidecar format, splitting, collections. |
 | `docs/adr/` | Architecture Decision Records — one file per significant decision (see `docs/adr/TEMPLATE.md`). |
+| `deploy/` | Server deployment: systemd unit, Apache vhost, certbot hook (copies of installed files). |
 
 ## Startup Checklist
 

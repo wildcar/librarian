@@ -1,0 +1,27 @@
+[Unit]
+Description=librarian MCP server (lib.wildcar.ru)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=librarian
+Group=librarian
+WorkingDirectory=/var/lib/librarian
+EnvironmentFile=/etc/librarian/librarian.env
+ExecStart=/usr/local/bin/librarian serve --addr 127.0.0.1:8090
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/librarian
+
+[Install]
+WantedBy=multi-user.target

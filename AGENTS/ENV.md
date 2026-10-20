@@ -71,6 +71,8 @@ LIBRARIAN_TESSERACT=$LOCALAPPDATA/Programs/Tesseract-OCR/tesseract.exe LIBRARIAN
 
 ### Server
 
+- Service: systemd `librarian.service` (`librarian serve` on 127.0.0.1:8090) behind Apache vhost `lib.wildcar.ru` with a webroot Let's Encrypt certificate; copies of all three files in `deploy/`. Logs: `journalctl -u librarian`, `/var/log/apache2/lib.*.log`.
+- Apache must not preserve the Host header for the MCP proxy: the Go MCP SDK rejects non-loopback Host on a loopback listener (403 «invalid Host header»).
 - Ubuntu's tesseract is built with OpenMP: parallel processes starve each other (5 pages: over 3 min instead of 24 s). `pages.Tesseract.Read` sets `OMP_THREAD_LIMIT=1`; do the same when running tesseract by hand in parallel.
 - The service user reads Nextcloud data only through ACLs: traverse (`--x`) on the parent folders and read-only `rX` (plus default ACL) on each source folder. Do not add `librarian` to `www-data`: that group can write all Nextcloud files.
 - Run the CLI as the service: `sudo -u librarian sh -c 'cd /var/lib/librarian; set -a; . /etc/librarian/librarian.env; set +a; exec /usr/local/bin/librarian "$@"' librarian <args>`; install with `go build -o bin/librarian ./cmd/librarian && sudo install -m 755 bin/librarian /usr/local/bin/`.
