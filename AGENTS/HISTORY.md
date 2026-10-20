@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-21 · Sample run on the server; tesseract thread fix
+- What: whole pipeline on the sample account from Nextcloud ($1.68 total, 68 documents, 60 linked); tesseract runs with OMP_THREAD_LIMIT=1; read-only ACLs for the service user.
+- Why: first run hung for an hour — OpenMP threads of parallel tesseract processes starved 4 cores.
+- Files: internal/pages/tesseract.go, AGENTS/ENV.md, AGENTS/STATE.md
+- Next: systemd unit and Apache vhost for lib.wildcar.ru; surname+year person matching.
+
 ## 2026-10-20 · Ubuntu server as dev and prod host
 - What: installed Go 1.27.3, poppler, tesseract with tessdata_best rus; build, vet, gofmt, tests and -race pass; service user, data dir and env files for router tokens.
 - Why: owner moved dev to the server and chose it for the service at lib.wildcar.ru.

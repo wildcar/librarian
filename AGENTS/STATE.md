@@ -12,7 +12,8 @@ an MCP server from any AI assistant.
 
 ## Now
 
-- Ubuntu server `homesrv` is now dev and prod: Go 1.27.3, poppler, tesseract (tessdata_best rus) installed; build, vet, gofmt, tests and `go test -race` pass; user `librarian`, `/var/lib/librarian`, env files `/etc/librarian/librarian.env` and `.env` prepared (router tokens to be filled by the owner).
+- Ubuntu server `homesrv` is dev and prod (toolchain, user `librarian`, `/var/lib/librarian`, env files). Sample run there (account `sergey`, from Nextcloud): 156 pages OCR $1.38, 1 flagged page; 68 documents, split $0.23, 0 reviews; digest $0.063, 1 flagged summary; 60 of 68 linked to the person.
+- Unlinked 8: 4 carry the name only in handwriting where OCR misread the initials (surname and birth year are right); 4 have no name at all.
 - Fifth Go slice done: persons, `index`, tokens, `librarian serve` with list_persons / search_documents / get_document; checked with a real MCP client; 61 of 69 sample documents linked to ЕБВ.
 - Fourth Go slice done: `librarian digest` / `show`; sample: 69 documents, 0 leaks, 1 flagged summary (a computed «28 дней»), $0.045.
 - Third Go slice done: `librarian split` / `docs`; sample: 69 documents, 100% against hand labels, $0.24; two rules made weak after calibration.
@@ -31,7 +32,7 @@ an MCP server from any AI assistant.
 
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
 - One command that runs the whole pipeline for new files (ingest → extract → split → digest → index), and `add_document` over MCP.
-- Owner fills router tokens; then run the sample through the pipeline on the server (from the Nextcloud folder, not a copy of the Windows catalog).
+- Person matching: surname plus birth year near each other as a weak signal (covers the 4 misread handwritten names); the rest go to the inbox for manual linking.
 - Deploy `librarian serve` as a systemd unit on 127.0.0.1:8090 behind Apache at `https://lib.wildcar.ru` (certbot, no proxy buffering for Streamable HTTP).
 - Inbox for the owner: unlinked documents, flagged summaries, split reviews.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.

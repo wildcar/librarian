@@ -69,6 +69,12 @@ LIBRARIAN_TESSERACT=$LOCALAPPDATA/Programs/Tesseract-OCR/tesseract.exe LIBRARIAN
 
 ## Host-specific quirks
 
+### Server
+
+- Ubuntu's tesseract is built with OpenMP: parallel processes starve each other (5 pages: over 3 min instead of 24 s). `pages.Tesseract.Read` sets `OMP_THREAD_LIMIT=1`; do the same when running tesseract by hand in parallel.
+- The service user reads Nextcloud data only through ACLs: traverse (`--x`) on the parent folders and read-only `rX` (plus default ACL) on each source folder. Do not add `librarian` to `www-data`: that group can write all Nextcloud files.
+- Run the CLI as the service: `sudo -u librarian sh -c 'cd /var/lib/librarian; set -a; . /etc/librarian/librarian.env; set +a; exec /usr/local/bin/librarian "$@"' librarian <args>`; install with `go build -o bin/librarian ./cmd/librarian && sudo install -m 755 bin/librarian /usr/local/bin/`.
+
 ### Former dev (Windows)
 
 - uv here fails to create the Python minor-version link (`Missing expected target directory`), but the venv still works; set `UV_PYTHON_INSTALL_DIR=%LOCALAPPDATA%/librarian/uv-python`.

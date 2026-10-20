@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -94,6 +95,10 @@ func (t Tesseract) Read(ctx context.Context, image string) (Reading, error) {
 	args = append(args, "-l", t.langs(), "--psm", "1", "-c", "tessedit_create_tsv=1")
 	var out, stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, exe, args...)
+	// Callers read pages in parallel. A tesseract built with OpenMP (Ubuntu's
+	// is) starts a thread per core in every process, and the spinning threads
+	// starve each other: five parallel pages took over 3 minutes instead of 24 s.
+	cmd.Env = append(os.Environ(), "OMP_THREAD_LIMIT=1")
 	cmd.Stdout, cmd.Stderr = &out, &stderr
 	if err := cmd.Run(); err != nil {
 		return Reading{}, fmt.Errorf("tesseract %s: %w: %s", image, err, strings.TrimSpace(stderr.String()))
