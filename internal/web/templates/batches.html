@@ -1,0 +1,23 @@
+{{template "head" "Пачки"}}{{template "bar" .V}}
+<main>
+<h1>Пачки</h1>
+{{with .W}}<div class="card status">
+{{if eq .State "running"}}<b>Идёт обработка</b>{{if .Stage}}: {{stage .Stage}}{{end}}. Начата {{.Started.Local.Format "15:04"}}.
+{{else if eq .State "waiting"}}{{if .Stage}}<b>Ждёт:</b> {{.Stage}}.{{else}}<b>Ждёт вашего разрешения.</b> Распознавание {{.PagesOCR}} стр. обойдётся примерно в {{usd .EstimateUSD}} — больше порога для автоматической обработки.
+<form method="post" action="/batches/process" style="margin-top:8px"><button>Обработать (~{{usd .EstimateUSD}})</button></form>{{end}}
+{{else if eq .State "failed"}}<b class="err">Обработка не удалась.</b>{{range .Errors}}<br><span class="muted">{{.}}</span>{{end}}
+{{else if eq .State "finished"}}Последняя обработка закончена в {{.Ended.Local.Format "15:04"}}, потрачено {{usd .CostUSD}}.{{if .Errors}} Ошибок: {{len .Errors}}.{{range .Errors}}<br><span class="muted">{{.}}</span>{{end}}{{end}}
+{{else}}Всё обработано.{{end}}
+{{if .Pending.Any}}<br><span class="muted">Ждут: файлов {{.Pending.Originals}}, разбивки {{.Pending.Split}}, резюме {{.Pending.Texts}}, дат {{.Pending.Dates}}.</span>{{end}}
+</div>{{if or (eq .State "running") .Pending.Any}}<script>setTimeout(function(){location.reload()},10000)</script>{{end}}{{end}}
+{{if .Batches}}<table class="list">
+<tr><th>№</th><th>Пачка</th><th>Чьи, характеристики</th><th>Готовность</th></tr>
+{{range .Batches}}<tr id="b{{.ID}}"><td>{{.ID}}</td>
+<td>{{if eq .Kind "upload"}}загрузка{{else if eq .Kind "folder"}}папка{{else}}{{.Kind}}{{end}}{{if .Label}} «{{.Label}}»{{end}}<br><span class="muted">{{.Created.Local.Format "02.01.2006 15:04"}}</span></td>
+<td>{{range $i, $p := .Persons}}{{if $i}}, {{end}}{{$p}}{{else}}<span class="muted">по тексту</span>{{end}}<br>{{range .Attrs}}<span class="chip">{{.Key}}: {{.Value}}</span>{{end}}</td>
+<td style="min-width:180px">{{with .P}}<div class="bar"><span style="width:{{pct .Ready .Documents}}%"></span></div>
+файлов {{.Originals}}: прочитано {{.Read}}{{if .Unsupported}}, не читаются {{.Unsupported}}{{end}}{{if .Failed}}, <span class="err">ошибок {{.Failed}}</span>{{end}}<br>
+документов {{.Documents}}, в поиске {{.Ready}}{{if .Done}} <span class="ok">✓</span>{{end}}{{end}}</td></tr>
+{{end}}</table>{{else}}<p>Пачек пока нет. <a href="/upload">Загрузить документы</a></p>{{end}}
+</main>
+{{template "foot"}}

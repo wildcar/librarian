@@ -1,0 +1,10 @@
+{{template "head" "Загружено"}}{{template "bar" .V}}
+<main><div class="card">
+<h1>Пачка №{{.Batch}}</h1>
+<table class="list">
+{{range .Files}}<tr><td>{{.Name}}</td><td>{{if .Problem}}<span class="err">{{.Problem}}</span>{{else if .New}}<span class="ok">новый</span>{{else}}<span class="muted">уже был в библиотеке</span>{{end}}</td></tr>{{end}}
+</table>
+<p>Новые файлы обрабатываются в фоне. <a href="/batches">Ход обработки — на странице «Пачки»</a>.</p>
+<p><a href="/upload">Загрузить ещё</a></p>
+</div></main>
+{{template "foot"}}

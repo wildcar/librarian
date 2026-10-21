@@ -4,6 +4,13 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Uploads through the web, processed in the background
+- What: `internal/pipeline` runs extract → split → digest → date → index under a per-account flock (`librarian run`); a worker in `serve` runs it after uploads and hourly, holding runs whose OCR estimate is over `LIBRARIAN_AUTO_LIMIT_USD` until «Обработать»; «Загрузить» stores files in the account and makes a labelled batch; «Пачки» shows progress.
+- Why: owner wants to add documents from the browser; the stages were started by hand one by one.
+- Files: internal/pipeline/*, internal/intake/store.go, internal/catalog/batches.go, internal/web/upload.go, internal/web/templates/*, cmd/librarian/main.go
+- Checked live on a throwaway account: upload → search in 8 s, $0.0002; the account was removed.
+- Next: a server folder within allowed roots; cloud links; the original file on the document page.
+
 ## 2026-10-22 · Assistants connect by letter (OAuth for MCP)
 - What: the service is its own OAuth 2.1 server (metadata, dynamic registration, authorize by the letter or a web session's button, token with PKCE and rotating refresh tokens); `/mcp` behind the SDK's `RequireBearerToken` takes OAuth and account tokens; «Ассистенты» page lists and disconnects; refinements log the assistant (`doc_changes.actor`, catalog migration 12).
 - Why: owner wants assistants connected by e-mail like the web, with the assistant named in the letter.

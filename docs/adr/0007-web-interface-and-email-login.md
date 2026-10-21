@@ -137,10 +137,12 @@ embedded in the binary: no build step, no separate frontend. Pages:
 ### Processing in the background
 
 `serve` runs a worker that takes new originals of every account through the whole
-pipeline (extract → split → digest → date → index), one original at a time, and shows
-progress per batch. A batch whose estimated model cost exceeds a limit waits for the
-owner's «Обработать» in the web. The same runner is `librarian run --account A` for the
-CLI, so the stages are no longer started one by one.
+pipeline (extract → split → digest → date → index), one account at a time, after an
+upload and every hour, and shows progress per batch. When the OCR estimate of what waits
+exceeds `LIBRARIAN_AUTO_LIMIT_USD` ($1 by default), the account waits for the owner's
+«Обработать» in the web; the approval covers that run only. The same runner is
+`librarian run --account A` for the CLI. A lock file (`flock`) per account keeps a CLI
+run and the worker from doing the same work twice.
 
 ### Mail
 

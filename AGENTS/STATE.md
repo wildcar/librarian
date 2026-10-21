@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- Uploads through the web (`/upload`, ADR-0007): files become a labelled batch, the worker in `serve` takes them to search (auto up to $1 OCR estimate, else «Обработать» on `/batches`); `librarian run` does the same from the CLI. Checked live on a throwaway account.
 - Assistants connect to `https://lib.wildcar.ru/mcp` by OAuth (ADR-0007): the letter names the assistant, «Ассистенты» lists and disconnects them, edits are signed with the assistant's name; checked live up to the authorization page, a real assistant not connected yet.
 - Web interface live at `https://lib.wildcar.ru` (ADR-0007): login by a letter (`wildcar@mail.ru` → `sergey`), the tree with chosen levels, the document page. Letters leave the local Postfix; without SPF/DKIM and PTR Gmail will refuse them, mail.ru took them before.
 - MCP `update_document`: an assistant refines persons, characteristics and date with the user's words as reason; marked until `librarian doc confirm | revert`.
@@ -39,7 +40,7 @@ an MCP server from any AI assistant.
 ## Next
 
 - Mail: SPF, DKIM, DMARC and A `mail.wildcar.ru` published, Port25 check passes SPF and DKIM (2026-10-22); login e-mail wildcar@mail.ru bound to `sergey`, mail.ru accepts letters; Gmail accepts through the router's VPN exit 38.135.53.21 (PTR out.wildcar.ru); others get mail from 95.165.109.250 without PTR.
-- Background pipeline in `serve` and `librarian run`; uploads: files, a server folder within allowed roots, cloud links (ADR-0007).
+- Uploads from a server folder within allowed roots and from cloud links (ADR-0007); the original on the document page.
 - Characteristics read from documents by a model (kind of document, specialty, organisation kind), `source = model`, same table as batch characteristics.
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
 - `add_document` over MCP.

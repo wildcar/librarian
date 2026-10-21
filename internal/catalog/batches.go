@@ -303,3 +303,53 @@ func (c *Catalog) DocBatches(ctx context.Context, docID string) ([]int64, error)
 	}
 	return out, rows.Err()
 }
+
+// BatchProgress is how far a batch's originals have come (ADR-0007).
+type BatchProgress struct {
+	Originals   int
+	Read        int // text of every page stored
+	Unsupported int // a kind of file not read yet (DOCX, XLSX, archives…)
+	Failed      int // reading failed; retried on the next run
+	Split       int // cut into documents
+	Documents   int
+	Ready       int // documents with text layers: in search
+}
+
+// Done says whether nothing is left to do for the batch.
+func (p BatchProgress) Done() bool {
+	return p.Read+p.Unsupported == p.Originals && p.Split == p.Read && p.Ready == p.Documents
+}
+
+// BatchProgresses returns every batch's progress, by batch id.
+func (c *Catalog) BatchProgresses(ctx context.Context) (map[int64]BatchProgress, error) {
+	rows, err := c.db.QueryContext(ctx, `
+		SELECT bo.batch_id,
+		  COUNT(*),
+		  SUM(e.status = 'done'),
+		  SUM(e.status = 'unsupported'),
+		  SUM(e.status = 'error'),
+		  SUM(s.status IS NOT NULL AND s.status != 'error'),
+		  (SELECT COUNT(*) FROM documents d JOIN batch_originals x ON x.sha256 = d.sha256 WHERE x.batch_id = bo.batch_id),
+		  (SELECT COUNT(*) FROM documents d JOIN batch_originals x ON x.sha256 = d.sha256
+		     JOIN texts t ON t.doc_id = d.id AND t.status IN ('done', 'flagged') WHERE x.batch_id = bo.batch_id)
+		FROM batch_originals bo
+		LEFT JOIN extraction e ON e.sha256 = bo.sha256
+		LEFT JOIN split s ON s.sha256 = bo.sha256
+		GROUP BY bo.batch_id`)
+	if err != nil {
+		return nil, fmt.Errorf("batch progress: %w", err)
+	}
+	defer rows.Close()
+	out := map[int64]BatchProgress{}
+	for rows.Next() {
+		var id int64
+		var p BatchProgress
+		var read, unsup, failed, split sql.NullInt64
+		if err := rows.Scan(&id, &p.Originals, &read, &unsup, &failed, &split, &p.Documents, &p.Ready); err != nil {
+			return nil, fmt.Errorf("batch progress: %w", err)
+		}
+		p.Read, p.Unsupported, p.Failed, p.Split = int(read.Int64), int(unsup.Int64), int(failed.Int64), int(split.Int64)
+		out[id] = p
+	}
+	return out, rows.Err()
+}

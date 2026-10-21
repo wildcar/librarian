@@ -23,6 +23,7 @@ import (
 	"github.com/wildcar/librarian/internal/account"
 	"github.com/wildcar/librarian/internal/catalog"
 	"github.com/wildcar/librarian/internal/mail"
+	"github.com/wildcar/librarian/internal/pipeline"
 	"github.com/wildcar/librarian/internal/users"
 )
 
@@ -42,8 +43,10 @@ type Config struct {
 	Catalog  func(*account.Account) (*catalog.Catalog, error)
 	// HasStaticToken says whether the account has a token made by the CLI.
 	HasStaticToken func(*account.Account) bool
-	Now            func() time.Time
-	Log            io.Writer
+	// Worker processes uploads in the background; nil shows no processing.
+	Worker *pipeline.Worker
+	Now    func() time.Time
+	Log    io.Writer
 }
 
 // Server serves the web pages.
@@ -72,6 +75,14 @@ func New(cfg Config) (*Server, error) {
 		"title": Title,
 		"date":  shownDate,
 		"since": dateSourceLabel,
+		"stage": func(s string) string { return stageNames[s] },
+		"usd":   func(f float64) string { return fmt.Sprintf("$%.2f", f) },
+		"pct": func(a, b int) int {
+			if b == 0 {
+				return 0
+			}
+			return 100 * a / b
+		},
 	}).ParseFS(files, "templates/*.html")
 	if err != nil {
 		return nil, err
@@ -90,6 +101,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /login/confirm", s.confirm)
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("GET /doc/{id}", s.authed(s.document))
+	mux.HandleFunc("GET /upload", s.authed(s.uploadForm))
+	mux.HandleFunc("POST /upload", s.authed(s.upload))
+	mux.HandleFunc("GET /batches", s.authed(s.batches))
+	mux.HandleFunc("POST /batches/process", s.authed(s.process))
 	mux.HandleFunc("GET /assistants", s.authed(s.assistants))
 	mux.HandleFunc("POST /assistants/{id}/disconnect", s.authed(s.disconnect))
 

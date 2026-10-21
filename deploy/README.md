@@ -30,3 +30,7 @@ Web interface (ADR-0007): the same address, every path but `/mcp` and `/health`.
 `LIBRARIAN_PUBLIC_URL=https://lib.wildcar.ru`, `SMTP_ADDR=127.0.0.1:25` (local Postfix, no login) and
 `MAIL_FROM=library@wildcar.ru`. An e-mail logs in only after `librarian account email <id> <e-mail>`;
 `librarian login-link <e-mail>` prints a one-time link when a letter does not arrive.
+
+Background processing: `serve` runs the pipeline for new files after uploads and hourly when `ROUTER_URL`/`ROUTER_TOKEN`
+are set; `LIBRARIAN_AUTO_LIMIT_USD` (default 1) is the OCR estimate it may spend without the owner's «Обработать».
+Uploaded files live in `/var/lib/librarian/accounts/<id>/files/`.

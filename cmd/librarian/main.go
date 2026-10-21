@@ -22,6 +22,7 @@
 //	librarian [--home DIR] show    --account <id> [--layer summary|essential|verbatim] <document id>
 //	librarian [--home DIR] person  add|list --account <id> [--code --name --label --alias --birth]
 //	librarian [--home DIR] index   --account <id>
+//	librarian [--home DIR] run     --account <id> [--workers N] [--no-check] [--dry-run]
 //	librarian [--home DIR] token   create --account <id>
 //	librarian [--home DIR] serve   [--addr 127.0.0.1:8090]
 //	librarian [--home DIR] text    --account <id> <sha256 prefix>
@@ -60,6 +61,7 @@ import (
 	"github.com/wildcar/librarian/internal/mail"
 	"github.com/wildcar/librarian/internal/mcpserver"
 	"github.com/wildcar/librarian/internal/pages"
+	"github.com/wildcar/librarian/internal/pipeline"
 	"github.com/wildcar/librarian/internal/report"
 	"github.com/wildcar/librarian/internal/router"
 	"github.com/wildcar/librarian/internal/split"
@@ -94,6 +96,7 @@ const usage = `usage:
   librarian [--home DIR] person add  --account <id> --code C --name "..." [--label L] [--alias A]... [--birth YYYY-MM-DD]
   librarian [--home DIR] person list --account <id>
   librarian [--home DIR] index  --account <id>
+  librarian [--home DIR] run    --account <id> [--workers N] [--no-check] [--dry-run]
   librarian [--home DIR] token create --account <id>
   librarian [--home DIR] serve  [--addr 127.0.0.1:8090]
   librarian [--home DIR] text   --account <id> <sha256 prefix>
@@ -101,6 +104,7 @@ const usage = `usage:
 
 doc set refines one document; it outranks batches, rules and models and index keeps it:
         --unlink and --unset also stop a batch or rule from bringing the person or value back.
+run takes new files through every stage (extract, split, digest, date, index); --dry-run only counts.
 doc confirm makes an assistant's refinements (MCP update_document) the owner's; doc revert drops them.
 
 labels: --person CODE (repeatable) — whose documents these are; with --name "..." [--label L]
@@ -164,7 +168,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return serve(ctx, *home, *addr, out)
 	case "token", "person", "index", "batch", "doc":
 		return accountAdmin(ctx, *home, cmd, rest, out)
-	case "ingest", "dupes", "stats", "extract", "verify", "text", "split", "docs", "digest", "date", "show":
+	case "ingest", "dupes", "stats", "extract", "verify", "text", "split", "docs", "digest", "date", "show", "run":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
 		id := fs.String("account", "", "account id")
@@ -383,6 +387,52 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 				report.ExtractRun(out, rep, *dryRun)
 			}
 			return err
+		case "run":
+			t, err := pipelineTools(ctx, *workers, !*noCheck)
+			if err != nil {
+				return err
+			}
+			p, err := pipeline.Waiting(ctx, c)
+			if err != nil {
+				return err
+			}
+			if !p.Any() {
+				fmt.Fprintln(out, "Всё обработано, новых файлов нет")
+				return nil
+			}
+			pagesOCR, est, err := pipeline.Estimate(ctx, c, t, a.ID)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Ждут: оригиналов %d (страниц на распознавание %d, ~$%.2f), разбивки %d, резюме %d, даты %d\n",
+				p.Originals, pagesOCR, est, p.Split, p.Texts, p.Dates)
+			if *dryRun {
+				return nil
+			}
+			rep, err := pipeline.Run(ctx, a, c, t, func(stage string) { fmt.Fprintf(out, "— %s\n", stage) })
+			if rep != nil {
+				if rep.Extract != nil {
+					report.ExtractRun(out, rep.Extract, false)
+				}
+				if rep.Split != nil {
+					report.SplitRun(out, rep.Split)
+				}
+				if rep.Digest != nil {
+					report.DigestRun(out, rep.Digest)
+				}
+				if rep.Date != nil {
+					report.DateRun(out, rep.Date)
+				}
+				if rep.Index != nil {
+					un, _ := c.Unlinked(ctx)
+					report.IndexRun(out, rep.Index, un)
+				}
+				fmt.Fprintf(out, "Итого: $%.3f\n", rep.CostUSD)
+				for _, e := range rep.Errors {
+					fmt.Fprintf(out, "Ошибка: %s\n", e)
+				}
+			}
+			return err
 		case "text":
 			if fs.NArg() != 1 {
 				return usageError{"expected a sha256 prefix"}
@@ -429,8 +479,23 @@ func serve(ctx context.Context, home, addr string, out io.Writer) error {
 	} else {
 		fmt.Fprintln(out, "SMTP_ADDR не задан: письма для входа пишутся в журнал (только для разработки)")
 	}
+	// Uploads are processed in the background when the router is configured.
+	var worker *pipeline.Worker
+	if tools, err := pipelineTools(ctx, 6, os.Getenv("LIBRARIAN_TESSERACT") != ""); err != nil {
+		fmt.Fprintf(out, "Фоновая обработка выключена: %v\n", err)
+	} else {
+		limit := 1.0
+		if v := os.Getenv("LIBRARIAN_AUTO_LIMIT_USD"); v != "" {
+			if limit, err = strconv.ParseFloat(v, 64); err != nil {
+				return fmt.Errorf("LIBRARIAN_AUTO_LIMIT_USD: %w", err)
+			}
+		}
+		worker = &pipeline.Worker{Home: home, Tools: tools, Catalog: s.Catalog, LimitUSD: limit, Every: time.Hour, Log: out}
+		go worker.Start(ctx)
+		fmt.Fprintf(out, "Фоновая обработка: без разрешения до $%.2f за запуск\n", limit)
+	}
 	w, err := web.New(web.Config{Registry: reg, Mail: sender, Public: public, Catalog: s.Catalog, Log: out,
-		HasStaticToken: (*account.Account).HasToken})
+		HasStaticToken: (*account.Account).HasToken, Worker: worker})
 	if err != nil {
 		return err
 	}
@@ -867,6 +932,34 @@ func accountAdmin(ctx context.Context, home, cmd string, rest []string, out io.W
 
 // stage builds the extraction stage from the environment: poppler always,
 // tesseract when the second reading is wanted.
+// pipelineTools are the stages' tools from the environment: poppler,
+// tesseract (unless off) and the model router.
+func pipelineTools(ctx context.Context, workers int, withCheck bool) (pipeline.Tools, error) {
+	t := pipeline.Tools{Poppler: pages.Poppler{Dir: os.Getenv("LIBRARIAN_POPPLER_DIR")}, Workers: workers}
+	if err := t.Poppler.Check(); err != nil {
+		return t, err
+	}
+	if withCheck {
+		ts := pages.Tesseract{Exe: os.Getenv("LIBRARIAN_TESSERACT"), Tessdata: os.Getenv("LIBRARIAN_TESSDATA")}
+		if err := ts.Check(ctx); err != nil {
+			return t, fmt.Errorf("%w (or pass --no-check)", err)
+		}
+		t.Checker = ts
+	}
+	url, token := os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN")
+	if url == "" || token == "" {
+		return t, fmt.Errorf("ROUTER_URL and ROUTER_TOKEN are required")
+	}
+	t.Model = func(ctx context.Context) (router.Chatter, func(), error) {
+		rc, err := router.Dial(ctx, url, token)
+		if err != nil {
+			return nil, nil, err
+		}
+		return rc, func() { rc.Close() }, nil
+	}
+	return t, nil
+}
+
 func stage(ctx context.Context, c *catalog.Catalog, withCheck bool) (*extract.Stage, error) {
 	pop := pages.Poppler{Dir: os.Getenv("LIBRARIAN_POPPLER_DIR")}
 	if err := pop.Check(); err != nil {
