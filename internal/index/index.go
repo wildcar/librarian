@@ -18,6 +18,7 @@ import (
 type Report struct {
 	Documents int
 	Dated     int
+	Partial   int // a date without a day or a year
 	Linked    int // documents with at least one person
 	Links     map[string]int
 }
@@ -34,13 +35,17 @@ func Run(ctx context.Context, c *catalog.Catalog, now time.Time) (*Report, error
 	}
 	rep := &Report{Documents: len(entries), Links: map[string]int{}}
 	for _, e := range entries {
-		if d := DateFromSummary(e.Summary, now); d != "" {
-			if err := c.SetDocDate(ctx, e.DocID, d, "summary"); err != nil {
-				return nil, err
-			}
-			rep.Dated++
-		} else if err := c.SetDocDate(ctx, e.DocID, "", ""); err != nil {
+		date, partial, source, err := docDate(ctx, c, e, now)
+		if err != nil {
 			return nil, err
+		}
+		if err := c.SetDocDate(ctx, e.DocID, date, partial, source); err != nil {
+			return nil, err
+		}
+		if date != "" {
+			rep.Dated++
+		} else if partial != "" {
+			rep.Partial++
 		}
 		if err := c.IndexText(ctx, e.DocID, e.Summary, e.Essential); err != nil {
 			return nil, fmt.Errorf("index %s: %w", e.DocID, err)
@@ -82,6 +87,29 @@ func text(ctx context.Context, c *catalog.Catalog, e catalog.IndexEntry) (string
 		}
 	}
 	return b.String(), nil
+}
+
+// docDate picks the document date: the creation date a model read and its
+// quote confirmed (internal/dating), with its basis as the source; when the
+// model found none, there is none. Until the date stage has run, or when its
+// answer was rejected or failed, the summary's first sentence stands in.
+func docDate(ctx context.Context, c *catalog.Catalog, e catalog.IndexEntry, now time.Time) (date, partial, source string, err error) {
+	d, ok, err := c.GetDocDate(ctx, e.DocID)
+	if err != nil {
+		return "", "", "", err
+	}
+	switch {
+	case ok && d.Status == catalog.DateDone && len(d.Date) == len("2006-01-02") && d.Date[0] != '-':
+		return d.Date, "", "model:" + d.Basis, nil
+	case ok && d.Status == catalog.DateDone:
+		return "", d.Date, "model:" + d.Basis, nil
+	case ok && d.Status == catalog.DateNone:
+		return "", "", "", nil
+	}
+	if s := DateFromSummary(e.Summary, now); s != "" {
+		return s, "", "summary", nil
+	}
+	return "", "", "", nil
 }
 
 // DateFromSummary takes the date of the summary's first sentence, which the

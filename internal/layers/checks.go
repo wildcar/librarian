@@ -283,6 +283,15 @@ var (
 
 type ymd [3]int
 
+// MonthOf reads a month written as a number, a word or its abbreviation, or a
+// Roman numeral; 0 when s is none of them.
+func MonthOf(s string) int {
+	if s == "" {
+		return 0
+	}
+	return monthOf(s)
+}
+
 // monthOf reads a month written as a number, a word or a Roman numeral.
 func monthOf(s string) int {
 	if s[0] >= '0' && s[0] <= '9' {

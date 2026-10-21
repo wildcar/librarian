@@ -9,6 +9,7 @@
 //	librarian [--home DIR] split   --account <id> [--limit N] [--model ID]
 //	librarian [--home DIR] docs    --account <id> [<sha256 prefix>]
 //	librarian [--home DIR] digest  --account <id> [--limit N] [--workers N] [--model ID]
+//	librarian [--home DIR] date    --account <id> [--limit N] [--workers N] [--model ID]
 //	librarian [--home DIR] show    --account <id> [--layer summary|essential|verbatim] <document id>
 //	librarian [--home DIR] person  add|list --account <id> [--code --name --label --alias --birth]
 //	librarian [--home DIR] index   --account <id>
@@ -38,6 +39,7 @@ import (
 
 	"github.com/wildcar/librarian/internal/account"
 	"github.com/wildcar/librarian/internal/catalog"
+	"github.com/wildcar/librarian/internal/dating"
 	"github.com/wildcar/librarian/internal/extract"
 	"github.com/wildcar/librarian/internal/index"
 	"github.com/wildcar/librarian/internal/intake"
@@ -62,6 +64,7 @@ const usage = `usage:
   librarian [--home DIR] split  --account <id> [--limit N] [--model ID]
   librarian [--home DIR] docs   --account <id> [<sha256 prefix>]
   librarian [--home DIR] digest --account <id> [--limit N] [--workers N] [--model ID]
+  librarian [--home DIR] date   --account <id> [--limit N] [--workers N] [--model ID]
   librarian [--home DIR] show   --account <id> [--layer summary|essential|verbatim] <document id>
   librarian [--home DIR] person add  --account <id> --code C --name "..." [--label L] [--alias A]... [--birth YYYY-MM-DD]
   librarian [--home DIR] person list --account <id>
@@ -136,7 +139,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return serve(ctx, *home, *addr, out)
 	case "token", "person", "index":
 		return accountAdmin(ctx, *home, cmd, rest, out)
-	case "ingest", "dupes", "stats", "extract", "verify", "text", "split", "docs", "digest", "show":
+	case "ingest", "dupes", "stats", "extract", "verify", "text", "split", "docs", "digest", "date", "show":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
 		id := fs.String("account", "", "account id")
@@ -221,6 +224,22 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 			rep, err := st.Run(ctx, layers.Options{Account: a.ID, Model: m, Workers: *workers, Limit: *limit})
 			if rep != nil {
 				report.DigestRun(out, rep)
+			}
+			return err
+		case "date":
+			rc, err := router.Dial(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
+			if err != nil {
+				return err
+			}
+			defer rc.Close()
+			m := *model
+			if m == extract.DefaultModel {
+				m = dating.DefaultModel
+			}
+			st := &dating.Stage{Catalog: c, Model: rc}
+			rep, err := st.Run(ctx, dating.Options{Account: a.ID, Model: m, Workers: *workers, Limit: *limit})
+			if rep != nil {
+				report.DateRun(out, rep)
 			}
 			return err
 		case "show":

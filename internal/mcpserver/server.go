@@ -25,7 +25,10 @@ search_documents ищет по словам и фильтрует по чело�
 новые первыми. total — сколько документов подходит всего; пока есть next_offset, повтори запрос
 с offset=next_offset, чтобы просмотреть все. get_document отдаёт документ.
 У документа может не быть даты или человека: так бывает, документ от этого не хуже, по нему просто
-меньше известно. missing=["date"] без фильтра по дате находит документы без даты, а вместе с
+меньше известно. date — дата создания документа (когда его составили, выдали, подписали), а не
+дата события, на которое он ссылается; date_source в get_document говорит, откуда она. Если у даты
+нет дня или года, она в date_partial (ГГГГ-ММ, ГГГГ или --ММ-ДД), а date пусто: недостающее не
+угадано, фильтры по датам такой документ считают документом без даты. missing=["date"] без фильтра по дате находит документы без даты, а вместе с
 date_from/date_to — документы в периоде или без даты; так же missing=["person"] и person.
 Если в документе нет однозначного ответа, так и скажи, не додумывай.
 По умолчанию отдаются только резюме без персональных данных. Суть документа (layer=essential) и
@@ -156,12 +159,13 @@ type searchIn struct {
 }
 
 type docOut struct {
-	ID      string   `json:"id"`
-	Date    string   `json:"date,omitempty"`
-	Persons []string `json:"persons"`
-	Pages   int      `json:"pages"`
-	Summary string   `json:"summary"`
-	Review  []string `json:"review"`
+	ID          string   `json:"id"`
+	Date        string   `json:"date,omitempty"`
+	DatePartial string   `json:"date_partial,omitempty"`
+	Persons     []string `json:"persons"`
+	Pages       int      `json:"pages"`
+	Summary     string   `json:"summary"`
+	Review      []string `json:"review"`
 }
 
 type searchOut struct {
@@ -195,13 +199,28 @@ func (t *tools) search(ctx context.Context, _ *mcp.CallToolRequest, in searchIn)
 	}
 	out := searchOut{Total: total, Documents: []docOut{}}
 	for _, h := range hits {
-		out.Documents = append(out.Documents, docOut{ID: h.DocID, Date: h.Date, Persons: nonNil(h.Persons),
+		out.Documents = append(out.Documents, docOut{ID: h.DocID, Date: h.Date, DatePartial: h.Partial, Persons: nonNil(h.Persons),
 			Pages: h.Pages, Summary: h.Summary, Review: nonNil(h.Review)})
 	}
 	if next := in.Offset + len(hits); len(hits) > 0 && next < total {
 		out.NextOffset = next
 	}
 	return nil, out, nil
+}
+
+// dateSource tells the assistant how sure the date is.
+func dateSource(s string) string {
+	switch s {
+	case "model:stated":
+		return "указана в документе как его дата"
+	case "model:event":
+		return "дата события, которое документ фиксирует"
+	case "model:":
+		return "прочитана из текста документа"
+	case "summary":
+		return "из первой фразы резюме"
+	}
+	return s
 }
 
 func nonNil(s []string) []string {
@@ -219,14 +238,15 @@ type getIn struct {
 }
 
 type getOut struct {
-	ID         string   `json:"id"`
-	Date       string   `json:"date,omitempty"`
-	DateSource string   `json:"date_source,omitempty"`
-	Persons    []string `json:"persons"`
-	Pages      int      `json:"pages"`
-	Layer      string   `json:"layer"`
-	Text       string   `json:"text"`
-	Review     []string `json:"review"`
+	ID          string   `json:"id"`
+	Date        string   `json:"date,omitempty"`
+	DatePartial string   `json:"date_partial,omitempty"`
+	DateSource  string   `json:"date_source,omitempty"`
+	Persons     []string `json:"persons"`
+	Pages       int      `json:"pages"`
+	Layer       string   `json:"layer"`
+	Text        string   `json:"text"`
+	Review      []string `json:"review"`
 }
 
 func (t *tools) get(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, getOut, error) {
@@ -245,7 +265,7 @@ func (t *tools) get(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp
 	if err != nil {
 		return nil, getOut{}, err
 	}
-	date, source, err := t.cat.DocDate(ctx, d.ID)
+	date, partial, source, err := t.cat.DocDateOf(ctx, d.ID)
 	if err != nil {
 		return nil, getOut{}, err
 	}
@@ -253,7 +273,7 @@ func (t *tools) get(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp
 	if err != nil {
 		return nil, getOut{}, err
 	}
-	out := getOut{ID: d.ID, Date: date, DateSource: source, Persons: nonNil(persons),
+	out := getOut{ID: d.ID, Date: date, DatePartial: partial, DateSource: dateSource(source), Persons: nonNil(persons),
 		Pages: d.LastPage - d.FirstPage + 1, Layer: layer, Review: nonNil(review)}
 	switch layer {
 	case "summary":

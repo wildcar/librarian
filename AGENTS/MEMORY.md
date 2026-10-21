@@ -45,6 +45,8 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - GPT-6 Luna summaries sometimes compute new numbers (two 14-day courses → «28 дней»); the number check flags them, which is intended (2026-10-20).
 - Date parsing for checks must handle: abbreviated/upper-case months, Roman months with Cyrillic Х, month-first «ДЕК 4, 2019», no swallowing on rejected candidates, sizes «5 × 9,12», times before dates (tests in internal/layers).
 - MCP tokens are `lib_<account>_<secret>`; the secret is base64url and may contain `_`, so split on the first `_` after the prefix (a flaky-test lesson, 2026-10-20).
+- Slashed dates like «09/06/2026» on device printouts are day first here; GPT-6 Luna read one as 6 September, and only the quote check caught it (2026-10-21).
+- Creation date on the sample (2026-10-21): 62 of 68 confirmed by quote, 4 without a creation date (an appointment memo, two consultation forms with only an exam date, undated recommendations), 2 rejected (a slashed date, an OCR-garbled «2«5» / X 2019»); $0.008 per run.
 - FTS5 in modernc sqlite: use the table name, not an alias, in MATCH and bm25().
 - Router `decide` replies carry cost in `cost_usd` (not `cost`).
 - Router provider `codex-oauth` was disabled on 2026-10-18; OpenAI models were reached through OpenRouter instead.

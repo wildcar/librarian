@@ -130,6 +130,21 @@ var schema = []string{
 	ALTER TABLE texts ADD COLUMN doc_date_source TEXT;   -- where the date came from
 	CREATE VIRTUAL TABLE docs_fts USING fts5(doc_id UNINDEXED, summary, essential,
 		tokenize = 'unicode61 remove_diacritics 2');`,
+	// 8: the creation date a model read from the document, with the quote it
+	// read it from (SPEC 8); a date without a day or a year is kept as such.
+	`CREATE TABLE doc_dates (
+		doc_id   TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+		status   TEXT NOT NULL,              -- done | none | rejected | error
+		date     TEXT,                       -- YYYY-MM-DD, YYYY-MM, YYYY or --MM-DD
+		basis    TEXT,                       -- stated | event
+		quote    TEXT,                       -- the fragment holding the date, as in the text
+		reason   TEXT,                       -- why an answer was rejected, or the error
+		model    TEXT NOT NULL,
+		cost_usd REAL NOT NULL DEFAULT 0,
+		pipeline INTEGER NOT NULL,
+		updated  TEXT NOT NULL
+	);
+	ALTER TABLE texts ADD COLUMN doc_date_partial TEXT;  -- YYYY-MM, YYYY or --MM-DD when no full date`,
 }
 
 // Catalog is an open account catalog.

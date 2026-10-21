@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-21 · Document date is the creation date, confirmed by a quote
+- What: `librarian date` (internal/dating): a model names the creation date, a quote and its basis; the quote must hold the date; partial dates kept; index uses it, the summary only as a fallback; MCP returns date_partial, date_source, a review reason for rejected dates.
+- Why: a referral or report with two dates in the summary's first sentence stayed undated; owner: the creation date is the main date.
+- Files: internal/dating/*, internal/catalog/dates.go, internal/catalog/catalog.go, internal/catalog/persons.go, internal/index/index.go, internal/mcpserver/server.go, internal/report/report.go, cmd/librarian/main.go, AGENTS/SPEC.md
+- Next: open characteristics and tags; one command for the whole pipeline.
+
 ## 2026-10-21 · Search pages through the whole archive; review reasons
 - What: search_documents returns total and next_offset, lists everything without words, searches by absent date/person (`missing`); `review` lists kinds of open checks in search and get_document.
 - Why: an assistant's feedback could not tell whether it had seen the whole archive (59 of 60) or what needs_review meant.

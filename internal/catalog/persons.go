@@ -143,13 +143,22 @@ func (c *Catalog) IndexEntries(ctx context.Context) ([]IndexEntry, error) {
 	return out, rows.Err()
 }
 
-// SetDocDate stores the document date and where it came from ("" clears it).
-func (c *Catalog) SetDocDate(ctx context.Context, docID, date, source string) error {
-	var d, s any
+// SetDocDate stores the document date and where it came from. date is a full
+// YYYY-MM-DD date, the only kind date filters compare; partial is a date
+// without a day or a year, kept for reading. Empty values clear them.
+func (c *Catalog) SetDocDate(ctx context.Context, docID, date, partial, source string) error {
+	var d, p, s any
 	if date != "" {
-		d, s = date, source
+		d = date
 	}
-	_, err := c.db.ExecContext(ctx, "UPDATE texts SET doc_date = ?, doc_date_source = ? WHERE doc_id = ?", d, s, docID)
+	if partial != "" {
+		p = partial
+	}
+	if date != "" || partial != "" {
+		s = source
+	}
+	_, err := c.db.ExecContext(ctx, "UPDATE texts SET doc_date = ?, doc_date_partial = ?, doc_date_source = ? WHERE doc_id = ?",
+		d, p, s, docID)
 	return err
 }
 
@@ -193,6 +202,7 @@ const (
 type Hit struct {
 	DocID   string
 	Date    string
+	Partial string // a date without a day or a year, when there is no full one
 	Persons []string
 	Pages   int
 	Summary string
@@ -264,7 +274,7 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 	}
 	limit = min(limit, 50)
 	rows, err := c.db.QueryContext(ctx, `
-		SELECT d.id, COALESCE(t.doc_date, ''), d.last_page - d.first_page + 1, COALESCE(t.summary, '')`+cond+`
+		SELECT d.id, COALESCE(t.doc_date, ''), COALESCE(t.doc_date_partial, ''), d.last_page - d.first_page + 1, COALESCE(t.summary, '')`+cond+`
 		ORDER BY `+order+fmt.Sprintf(" LIMIT %d OFFSET %d", limit, max(q.Offset, 0)), args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("search: %w", err)
@@ -273,7 +283,7 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 	var out []Hit
 	for rows.Next() {
 		var h Hit
-		if err := rows.Scan(&h.DocID, &h.Date, &h.Pages, &h.Summary); err != nil {
+		if err := rows.Scan(&h.DocID, &h.Date, &h.Partial, &h.Pages, &h.Summary); err != nil {
 			return nil, 0, fmt.Errorf("search: %w", err)
 		}
 		out = append(out, h)
@@ -293,7 +303,8 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 }
 
 // DocReview says what the owner still has to check in a document: pages the
-// second reading doubted, a split the rules disputed, failed summary checks.
+// second reading doubted, a split the rules disputed, a creation date the
+// text did not confirm, failed summary checks.
 // The reasons name the kind of problem only, never the text that caused it,
 // because a leak check's hit is the very personal data it caught.
 func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error) {
@@ -329,6 +340,14 @@ func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error)
 	}
 	if split.String == SplitReview {
 		out = append(out, "разбивка: границы документа не подтверждены")
+	}
+	var dateStatus sql.NullString
+	err = c.db.QueryRowContext(ctx, "SELECT status FROM doc_dates WHERE doc_id = ?", docID).Scan(&dateStatus)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("review %s: %w", docID, err)
+	}
+	if dateStatus.String == DateRejected {
+		out = append(out, "дата: названная моделью дата не подтвердилась текстом")
 	}
 	if status.String == TextsFlagged {
 		seen := map[string]bool{}
@@ -377,14 +396,15 @@ func ftsQuery(text string) string {
 	return strings.Join(terms, " AND ")
 }
 
-// DocDate returns a document's date and its source.
-func (c *Catalog) DocDate(ctx context.Context, docID string) (string, string, error) {
-	var d, s sql.NullString
-	err := c.db.QueryRowContext(ctx, "SELECT doc_date, doc_date_source FROM texts WHERE doc_id = ?", docID).Scan(&d, &s)
+// DocDateOf returns a document's full date, its partial date and their source.
+func (c *Catalog) DocDateOf(ctx context.Context, docID string) (date, partial, source string, err error) {
+	var d, p, s sql.NullString
+	err = c.db.QueryRowContext(ctx, "SELECT doc_date, doc_date_partial, doc_date_source FROM texts WHERE doc_id = ?", docID).
+		Scan(&d, &p, &s)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", "", nil
+		return "", "", "", nil
 	}
-	return d.String, s.String, err
+	return d.String, p.String, s.String, err
 }
 
 // Unlinked counts documents with text layers but no person.

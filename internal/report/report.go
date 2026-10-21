@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/wildcar/librarian/internal/catalog"
+	"github.com/wildcar/librarian/internal/dating"
 	"github.com/wildcar/librarian/internal/extract"
 	"github.com/wildcar/librarian/internal/index"
 	"github.com/wildcar/librarian/internal/intake"
@@ -127,10 +128,20 @@ func Persons(w io.Writer, ps []catalog.Person) {
 	}
 }
 
+// DateRun prints the result of one creation-date run.
+func DateRun(w io.Writer, r *dating.Report) {
+	fmt.Fprintf(w, "Документов: %d, дата %d, неполная дата %d, даты нет %d, не подтвердилось %d, с ошибкой %d. "+
+		"Модель стоила $%.4f. Время: %s\n",
+		r.Documents, r.Dated, r.Partial, r.None, r.Rejected, r.Failed, r.CostUSD, r.Duration.Round(1e9))
+	for _, n := range r.Notes {
+		fmt.Fprintf(w, "  %s\n", n)
+	}
+}
+
 // IndexRun prints the result of reindexing.
 func IndexRun(w io.Writer, r *index.Report, unlinked int) {
-	fmt.Fprintf(w, "Документов: %d, с датой %d, привязано к людям %d, без человека %d\n",
-		r.Documents, r.Dated, r.Linked, unlinked)
+	fmt.Fprintf(w, "Документов: %d, с датой %d, с неполной датой %d, привязано к людям %d, без человека %d\n",
+		r.Documents, r.Dated, r.Partial, r.Linked, unlinked)
 	for _, k := range sortedKeys(r.Links) {
 		fmt.Fprintf(w, "  %s: %d\n", k, r.Links[k])
 	}
