@@ -58,8 +58,16 @@ func Run(ctx context.Context, c *catalog.Catalog, now time.Time) (*Report, error
 		if err := c.ClearDerived(ctx, e.DocID); err != nil {
 			return nil, err
 		}
+		// What the owner ruled out for this document is never derived again.
+		rejected, err := c.DocRejected(ctx, e.DocID)
+		if err != nil {
+			return nil, err
+		}
 		codes, fromBatch := map[string]bool{}, map[string]bool{}
 		for _, p := range persons {
+			if rejected.Persons[p.Code] {
+				continue
+			}
 			if reason := Match(p, verbatim); reason != "" {
 				if err := c.LinkPerson(ctx, e.DocID, p.Code, "rule", reason); err != nil {
 					return nil, err
@@ -75,16 +83,29 @@ func Run(ctx context.Context, c *catalog.Catalog, now time.Time) (*Report, error
 		}
 		for _, b := range batches {
 			for _, code := range b.Persons {
+				if rejected.Persons[code] {
+					continue
+				}
 				if err := c.LinkPerson(ctx, e.DocID, code, "batch", fmt.Sprintf("пачка %d", b.BatchID)); err != nil {
 					return nil, err
 				}
 				codes[code], fromBatch[code] = true, true
 			}
 			for _, a := range b.Attrs {
+				if rejected.Rejects(a) {
+					continue
+				}
 				if err := c.SetDocAttr(ctx, e.DocID, a, fmt.Sprintf("batch:%d", b.BatchID)); err != nil {
 					return nil, err
 				}
 			}
+		}
+		links, err := c.DocLinks(ctx, e.DocID) // manual links count too
+		if err != nil {
+			return nil, err
+		}
+		for _, l := range links {
+			codes[l.Code] = true
 		}
 		for code := range codes {
 			rep.Links[code]++
@@ -114,11 +135,21 @@ func text(ctx context.Context, c *catalog.Catalog, e catalog.IndexEntry) (string
 	return b.String(), nil
 }
 
-// docDate picks the document date: the creation date a model read and its
+// docDate picks the document date: the owner's date first; then the
+// creation date a model read and its
 // quote confirmed (internal/dating), with its basis as the source; when the
 // model found none, there is none. Until the date stage has run, or when its
 // answer was rejected or failed, the summary's first sentence stands in.
 func docDate(ctx context.Context, c *catalog.Catalog, e catalog.IndexEntry, now time.Time) (date, partial, source string, err error) {
+	if m, ok, err := c.ManualDate(ctx, e.DocID); err != nil || ok {
+		if err != nil || m == "" {
+			return "", "", "", err
+		}
+		if full, _ := catalog.CheckDate(m); full {
+			return m, "", "manual", nil
+		}
+		return "", m, "manual", nil
+	}
 	d, ok, err := c.GetDocDate(ctx, e.DocID)
 	if err != nil {
 		return "", "", "", err

@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-21 · Manual refinement of one document
+- What: `librarian doc set` (person link/unlink, characteristics add/rule out, date full/partial/none/clear) and `doc show` with provenance; index never re-derives what the owner ruled out; MCP date source «уточнена владельцем».
+- Why: owner: documents get refined later (date, person, outdated facts) and the refinement must hold.
+- Files: internal/catalog/manual.go, internal/catalog/catalog.go, internal/catalog/persons.go, internal/index/*, internal/report/report.go, internal/mcpserver/server.go, cmd/librarian/main.go, docs/adr/0006-batches-and-characteristics.md, AGENTS/SPEC.md
+- Next: refinements over MCP; characteristics read by a model.
+
 ## 2026-10-21 · Batches: a person and characteristics for everything that came in together
 - What: ADR-0006; catalog batches (migration turns intake runs into batches), `ingest --person/--name/--attr/--batch-label`, `batch list|set`; index inherits batch persons and characteristics (manual > batch > rule, conflict → review); MCP attrs, batches, `attrs`/`batch` filters, `missing` for any key.
 - Why: 8 of 68 sample documents could not be linked from their text; the owner wants to say whose a batch is and give it characteristics instead of smarter name rules.

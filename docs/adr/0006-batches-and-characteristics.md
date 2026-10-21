@@ -77,6 +77,12 @@ is not hidden by the batch.
   `attrs` (["key=value"], all must hold), `batch`, and `missing` accepts any
   characteristic key besides `date` and `person`.
 
+**Manual refinement** of one document (`librarian doc set`, added the same day) outranks
+batches, rules and models. Ruling something out is stored too (`doc_rejected`: a person,
+a characteristic value or a whole key), because `index` rebuilds derived rows on every run
+and would otherwise bring back what the owner removed. The owner's date lives in
+`doc_manual_dates` (full, partial, or «no date») and replaces the derived one.
+
 ## Consequences
 
 - Linking no longer depends on reading a name: everything that came in a labelled batch is

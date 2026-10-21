@@ -377,8 +377,10 @@ func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error)
 	if split.String == SplitReview {
 		out = append(out, "разбивка: границы документа не подтверждены")
 	}
+	// A rejected model date matters only while the owner has not dated the document.
 	var dateStatus sql.NullString
-	err = c.db.QueryRowContext(ctx, "SELECT status FROM doc_dates WHERE doc_id = ?", docID).Scan(&dateStatus)
+	err = c.db.QueryRowContext(ctx, `SELECT status FROM doc_dates WHERE doc_id = ?
+		AND doc_id NOT IN (SELECT doc_id FROM doc_manual_dates)`, docID).Scan(&dateStatus)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("review %s: %w", docID, err)
 	}

@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- Manual refinement per document: `librarian doc set | show` (person, characteristics, date), kept by index over batches, rules and models.
 - Batches (ADR-0006): the sample folder is batch 1, labelled ЕБВ — all 68 documents linked (60 by name before); characteristics per batch, searchable through MCP.
 - Document date is the creation date (`librarian date`, run after `digest`, before `index`): on the sample 64 of 68 confirmed by a quote, 2 without one, 2 rejected and dated from the summary; `date_partial` for dates without a day or year; $0.008.
 - An assistant worked through `lib.wildcar.ru` (2026-10-21); its feedback led to paging and absence search: `search_documents` returns `total`/`next_offset`, lists all without words, `missing: [date|person]`; `review` lists kinds of open checks.
@@ -34,7 +35,7 @@ an MCP server from any AI assistant.
 
 ## Next
 
-- Manual per-document person links and characteristics (CLI, later MCP), overriding batch and rule.
+- Refinements over MCP (`update_document`?): who may change what from an assistant.
 - Characteristics read from documents by a model (kind of document, specialty, organisation kind), `source = model`, same table as batch characteristics.
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
 - One command that runs the whole pipeline for new files (ingest → extract → split → digest → date → index), and `add_document` over MCP.

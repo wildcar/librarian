@@ -186,6 +186,22 @@ var schema = []string{
 		SELECT r.id, o.sha256 FROM intake_runs r JOIN originals o
 		ON o.first_seen >= r.started AND o.first_seen <= COALESCE(r.finished, r.started)
 		WHERE r.new_files > 0;`,
+	// 10: the owner's refinements of one document: what must not be derived
+	// for it again, and its date. Manual links and characteristics live in
+	// doc_persons (method manual) and doc_attrs (source manual).
+	`CREATE TABLE doc_rejected (
+		doc_id  TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+		kind    TEXT NOT NULL,               -- person | attr
+		key     TEXT NOT NULL,               -- person code, or characteristic key
+		value   TEXT NOT NULL DEFAULT '',    -- characteristic value; '' = every value of the key
+		created TEXT NOT NULL,
+		PRIMARY KEY (doc_id, kind, key, value)
+	);
+	CREATE TABLE doc_manual_dates (
+		doc_id  TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+		date    TEXT NOT NULL,               -- YYYY-MM-DD, YYYY-MM, YYYY, --MM-DD; '' = the document has no date
+		created TEXT NOT NULL
+	);`,
 }
 
 // Catalog is an open account catalog.

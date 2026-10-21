@@ -230,6 +230,8 @@ func dateSource(s string) string {
 		return "прочитана из текста документа"
 	case "summary":
 		return "из первой фразы резюме"
+	case "manual":
+		return "уточнена владельцем"
 	}
 	return s
 }

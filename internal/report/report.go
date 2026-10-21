@@ -138,6 +138,96 @@ func DateRun(w io.Writer, r *dating.Report) {
 	}
 }
 
+// DocState is what the catalog knows about one document, with provenance.
+type DocState struct {
+	ID                        string
+	Pages                     int
+	Date, Partial, DateSource string
+	Links                     []catalog.PersonLink
+	Attrs                     []catalog.SourcedAttr
+	Batches                   []int64
+	Rejected                  catalog.Rejected
+	Review                    []string
+	Summary                   string
+}
+
+// Doc prints one document's facts and where each came from.
+func Doc(w io.Writer, d DocState) {
+	fmt.Fprintf(w, "Документ %s, страниц %d\n", d.ID, d.Pages)
+	date := d.Date
+	if date == "" {
+		date = d.Partial
+	}
+	if date == "" {
+		date = "нет"
+	}
+	if d.DateSource != "" {
+		date += " (" + sourceLabel(d.DateSource) + ")"
+	}
+	fmt.Fprintf(w, "Дата: %s\n", date)
+	if len(d.Links) == 0 {
+		fmt.Fprintln(w, "Люди: нет")
+	}
+	for _, l := range d.Links {
+		fmt.Fprintf(w, "Человек: %s (%s)\n", l.Code, linkLabel(l))
+	}
+	for _, a := range d.Attrs {
+		fmt.Fprintf(w, "Характеристика: %s (%s)\n", a.Attr, sourceLabel(a.Source))
+	}
+	var not []string
+	for code := range d.Rejected.Persons {
+		not = append(not, code)
+	}
+	for a := range d.Rejected.Attrs {
+		if a.Value == "" {
+			not = append(not, a.Key+"=*")
+		} else {
+			not = append(not, a.String())
+		}
+	}
+	if len(not) > 0 {
+		sort.Strings(not)
+		fmt.Fprintf(w, "Исключено владельцем (пачки и правила это не вернут): %s\n", strings.Join(not, "; "))
+	}
+	if len(d.Batches) > 0 {
+		ids := make([]string, len(d.Batches))
+		for i, b := range d.Batches {
+			ids[i] = fmt.Sprint(b)
+		}
+		fmt.Fprintf(w, "Пачки: %s\n", strings.Join(ids, ", "))
+	}
+	for _, r := range d.Review {
+		fmt.Fprintf(w, "На проверку: %s\n", r)
+	}
+	fmt.Fprintf(w, "Резюме: %s\n", d.Summary)
+}
+
+func linkLabel(l catalog.PersonLink) string {
+	switch l.Method {
+	case "manual":
+		return "вручную"
+	case "batch":
+		return l.Reason
+	}
+	return "по тексту: " + l.Reason
+}
+
+func sourceLabel(s string) string {
+	switch {
+	case s == "manual":
+		return "вручную"
+	case strings.HasPrefix(s, "batch:"):
+		return "пачка " + strings.TrimPrefix(s, "batch:")
+	case s == "model:stated":
+		return "указана в документе"
+	case s == "model:event":
+		return "дата события"
+	case s == "summary":
+		return "из резюме"
+	}
+	return s
+}
+
 // BatchCreated prints a new batch.
 func BatchCreated(w io.Writer, b catalog.Batch) {
 	fmt.Fprintf(w, "Пачка %d: оригиналов %d%s\n", b.ID, b.Originals, batchLabels(b))

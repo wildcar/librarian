@@ -4,6 +4,9 @@
 //	librarian [--home DIR] ingest  --account <id> [--workers N] [batch labels] [--batch-label L] <folder>
 //	librarian [--home DIR] batch   list --account <id>
 //	librarian [--home DIR] batch   set  --account <id> [batch labels] [--no-person] [--unset KEY[=VALUE]]... <batch id>
+//	librarian [--home DIR] doc     show --account <id> <document id>
+//	librarian [--home DIR] doc     set  --account <id> [--person CODE]... [--unlink CODE]... [--no-person]
+//	                                [--attr KEY=VALUE]... [--unset KEY[=VALUE]]... [--date D | --no-date | --clear-date] <document id>
 //	librarian [--home DIR] dupes   --account <id>
 //	librarian [--home DIR] stats   --account <id>
 //	librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run] [--no-check]
@@ -65,6 +68,9 @@ const usage = `usage:
   librarian [--home DIR] ingest --account <id> [--workers N] [labels] [--batch-label L] <folder>
   librarian [--home DIR] batch list --account <id>
   librarian [--home DIR] batch set  --account <id> [labels] [--no-person] [--unset KEY[=VALUE]]... <batch id>
+  librarian [--home DIR] doc show --account <id> <document id>
+  librarian [--home DIR] doc set  --account <id> [--person CODE]... [--unlink CODE]... [--no-person]
+        [--attr KEY=VALUE]... [--unset KEY[=VALUE]]... [--date YYYY-MM-DD|YYYY-MM|YYYY|--MM-DD | --no-date | --clear-date] <document id>
   librarian [--home DIR] dupes  --account <id>
   librarian [--home DIR] stats  --account <id>
   librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run] [--no-check]
@@ -81,6 +87,9 @@ const usage = `usage:
   librarian [--home DIR] serve  [--addr 127.0.0.1:8090]
   librarian [--home DIR] text   --account <id> <sha256 prefix>
   librarian version
+
+doc set refines one document; it outranks batches, rules and models and index keeps it:
+        --unlink and --unset also stop a batch or rule from bringing the person or value back.
 
 labels: --person CODE (repeatable) — whose documents these are; with --name "..." [--label L]
         [--birth YYYY-MM-DD] [--alias A]... a new person is created under CODE;
@@ -149,7 +158,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 			return usageError{err.Error()}
 		}
 		return serve(ctx, *home, *addr, out)
-	case "token", "person", "index", "batch":
+	case "token", "person", "index", "batch", "doc":
 		return accountAdmin(ctx, *home, cmd, rest, out)
 	case "ingest", "dupes", "stats", "extract", "verify", "text", "split", "docs", "digest", "date", "show":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
@@ -408,6 +417,37 @@ func serve(ctx context.Context, home, addr string, out io.Writer) error {
 }
 
 // stringList is a repeatable string flag.
+// showDoc prints what the catalog knows about a document and where each fact
+// came from.
+func showDoc(ctx context.Context, c *catalog.Catalog, id string, out io.Writer) error {
+	d, t, err := c.GetDocument(ctx, id)
+	if err != nil {
+		return err
+	}
+	var st report.DocState
+	st.ID, st.Pages, st.Summary = d.ID, d.LastPage-d.FirstPage+1, t.Summary
+	if st.Date, st.Partial, st.DateSource, err = c.DocDateOf(ctx, id); err != nil {
+		return err
+	}
+	if st.Links, err = c.DocLinks(ctx, id); err != nil {
+		return err
+	}
+	if st.Attrs, err = c.DocAttrSources(ctx, id); err != nil {
+		return err
+	}
+	if st.Batches, err = c.DocBatches(ctx, id); err != nil {
+		return err
+	}
+	if st.Rejected, err = c.DocRejected(ctx, id); err != nil {
+		return err
+	}
+	if st.Review, err = c.DocReview(ctx, id); err != nil {
+		return err
+	}
+	report.Doc(out, st)
+	return nil
+}
+
 // reindex reruns index and reports it; batch changes reach documents this way.
 func reindex(ctx context.Context, c *catalog.Catalog, out io.Writer) error {
 	rep, err := index.Run(ctx, c, time.Now())
@@ -492,7 +532,7 @@ type stringList []string
 func (l *stringList) String() string     { return strings.Join(*l, ", ") }
 func (l *stringList) Set(v string) error { *l = append(*l, v); return nil }
 
-// accountAdmin handles token, person, batch and index.
+// accountAdmin handles token, person, batch, doc and index.
 func accountAdmin(ctx context.Context, home, cmd string, rest []string, out io.Writer) error {
 	sub := ""
 	if cmd != "index" {
@@ -507,9 +547,13 @@ func accountAdmin(ctx context.Context, home, cmd string, rest []string, out io.W
 	code := fs.String("code", "", "person code")
 	var labels batchFlags
 	labels.register(fs)
-	noPerson := fs.Bool("no-person", false, "batch set: the batch names no person")
-	var unset stringList
-	fs.Var(&unset, "unset", "batch set: KEY or KEY=VALUE to remove (repeatable)")
+	noPerson := fs.Bool("no-person", false, "batch set: the batch names no person; doc set: unlink every person")
+	var unset, unlink stringList
+	fs.Var(&unset, "unset", "batch/doc set: KEY or KEY=VALUE to remove (repeatable)")
+	fs.Var(&unlink, "unlink", "doc set: a person this document is not about (repeatable)")
+	date := fs.String("date", "", "doc set: YYYY-MM-DD, YYYY-MM, YYYY or --MM-DD")
+	noDate := fs.Bool("no-date", false, "doc set: the document has no date")
+	clearDate := fs.Bool("clear-date", false, "doc set: forget the manual date")
 	if err := fs.Parse(rest); err != nil {
 		return usageError{err.Error()}
 	}
@@ -558,6 +602,60 @@ func accountAdmin(ctx context.Context, home, cmd string, rest []string, out io.W
 			return err
 		}
 		report.Batches(out, bs)
+	case cmd == "doc" && sub == "show":
+		if fs.NArg() != 1 {
+			return usageError{"expected a document id"}
+		}
+		return showDoc(ctx, c, fs.Arg(0), out)
+	case cmd == "doc" && sub == "set":
+		if fs.NArg() != 1 {
+			return usageError{"expected a document id"}
+		}
+		doc := fs.Arg(0)
+		dates := 0
+		for _, b := range []bool{*date != "", *noDate, *clearDate} {
+			if b {
+				dates++
+			}
+		}
+		if dates > 1 {
+			return usageError{"--date, --no-date and --clear-date exclude each other"}
+		}
+		attrs, err := labels.check(ctx, c)
+		if err != nil {
+			return err
+		}
+		ch := catalog.DocChange{Link: labels.persons, Unlink: unlink, Attrs: attrs, ClearDate: *clearDate}
+		if *noPerson {
+			ls, err := c.DocLinks(ctx, doc)
+			if err != nil {
+				return err
+			}
+			for _, l := range ls {
+				ch.Unlink = append(ch.Unlink, l.Code)
+			}
+		}
+		for _, u := range unset {
+			k, v, _ := strings.Cut(u, "=")
+			ch.Unset = append(ch.Unset, catalog.Attr{Key: catalog.AttrKey(k), Value: strings.TrimSpace(v)})
+		}
+		switch {
+		case *date != "":
+			ch.Date = date
+		case *noDate:
+			none := ""
+			ch.Date = &none
+		}
+		if err := labels.createPerson(ctx, c, out); err != nil {
+			return err
+		}
+		if err := c.ChangeDocument(ctx, doc, ch, time.Now()); err != nil {
+			return err
+		}
+		if _, err := index.Run(ctx, c, time.Now()); err != nil {
+			return err
+		}
+		return showDoc(ctx, c, doc, out)
 	case cmd == "batch" && sub == "set":
 		if fs.NArg() != 1 {
 			return usageError{"expected a batch id"}
