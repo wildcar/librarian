@@ -37,7 +37,7 @@ an MCP server from any AI assistant.
 
 ## Next
 
-- Mail: SPF, DKIM, DMARC and A `mail.wildcar.ru` published, Port25 check passes SPF and DKIM (2026-10-22); left: MX for wildcar.ru (owner), PTR 95.165.109.250 → mail.wildcar.ru (MGTS), a letter to Gmail.
+- Mail: SPF, DKIM, DMARC and A `mail.wildcar.ru` published, Port25 check passes SPF and DKIM (2026-10-22); login e-mail wildcar@mail.ru bound to `sergey`, mail.ru accepts letters; left: MX (owner); Gmail needs the router to send port 25 to Google outside the VPN and PTR from MGTS, or an outside relay.
 - OAuth 2.1 for MCP with the same letter, the assistant named in it; «Ассистенты» page; the assistant's name in the refinement log.
 - Background pipeline in `serve` and `librarian run`; uploads: files, a server folder within allowed roots, cloud links (ADR-0007).
 - Characteristics read from documents by a model (kind of document, specialty, organisation kind), `source = model`, same table as batch characteristics.
