@@ -192,7 +192,20 @@ func TestLoginTreeAndIsolation(t *testing.T) {
 		t.Errorf("after opening the link: %s", st)
 	}
 	tok := strings.TrimPrefix(link, "/login/confirm?t=")
-	if code, loc, _ := phone.do("POST", "/login/confirm", url.Values{"t": {tok}}); code != http.StatusSeeOther || loc != "/" {
+	// The button is posted the way a browser does it: with the site's own
+	// Origin, which the page's referrer policy must let through.
+	resp, err := http.Get(ts.URL + "/login")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if p := resp.Header.Get("Referrer-Policy"); p == "no-referrer" || p == "" {
+		t.Errorf("referrer policy %q makes browsers send Origin: null", p)
+	}
+	if code, _, _ := phone.do("POST", "/login/confirm", url.Values{"t": {"x"}}, "Origin", "null"); code != http.StatusForbidden {
+		t.Errorf("Origin null: %d", code)
+	}
+	if code, loc, _ := phone.do("POST", "/login/confirm", url.Values{"t": {tok}}, "Origin", ts.URL); code != http.StatusSeeOther || loc != "/" {
 		t.Fatalf("button: %d %q", code, loc)
 	}
 	if code, _, _ := phone.do("POST", "/login/confirm", url.Values{"t": {tok}}); code != http.StatusGone {

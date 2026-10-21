@@ -8,7 +8,7 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 - What: ADR-0007 (web + e-mail login for people and assistants, OAuth for MCP next); `service.sqlite` registry (e-mails, one-time links, sessions); letters over SMTP to the local Postfix; web login (button on the link page, the asking browser polls); tree with chosen levels and the document page; `/mcp` routed explicitly; `account email|unbind|list`, `login-link`.
 - Why: owner wants uploads and an overview in a browser and one e-mail login for the web and assistants.
 - Files: docs/adr/0007-web-interface-and-email-login.md, internal/users/*, internal/mail/mail.go, internal/web/*, internal/catalog/shelf.go, internal/catalog/dates.go, internal/mcpserver/server.go, cmd/librarian/main.go, deploy/librarian.service
-- Fixes-on-the-fly: the registry was created 0644 (chmod 0600, unit `UMask=0077`); a link outlived its e-mail's unbinding.
+- Fixes-on-the-fly: the registry was created 0644 (chmod 0600, unit `UMask=0077`); a link outlived its e-mail's unbinding.; `Referrer-Policy: no-referrer` made browsers post the login button with `Origin: null`, refused as a foreign site (now `same-origin`).
 - Next: SPF/DKIM/DMARC and PTR for wildcar.ru; OAuth for MCP; background pipeline and uploads.
 
 ## 2026-10-21 · Refinement by an assistant over MCP

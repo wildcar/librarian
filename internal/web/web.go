@@ -97,7 +97,9 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) guard(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Referrer-Policy", "no-referrer") // the confirm link must not leak
+		// The confirm link must not leak to other sites; "no-referrer" would
+		// also make browsers send "Origin: null" with forms, refused below.
+		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'")
 		if r.Method == http.MethodPost {
