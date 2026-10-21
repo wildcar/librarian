@@ -51,14 +51,14 @@ func TestLoginByLetter(t *testing.T) {
 	if _, err := r.Peek(ctx, l.Link, now); err != nil {
 		t.Error("peeking used the link")
 	}
-	if email, err := r.Confirm(ctx, l.Link, now); err != nil || email != "owner@example.org" {
-		t.Fatalf("confirm: %q %v", email, err)
+	if p, err := r.Confirm(ctx, l.Link, now); err != nil || p.Email != "owner@example.org" {
+		t.Fatalf("confirm: %+v %v", p, err)
 	}
 	if _, err := r.Confirm(ctx, l.Link, now); err == nil {
 		t.Error("link used twice")
 	}
-	if st, email, _ := r.Take(ctx, l.Wait, now); st != users.Confirmed || email != "owner@example.org" {
-		t.Errorf("take: %v %q", st, email)
+	if st, tk, _ := r.Take(ctx, l.Wait, now); st != users.Confirmed || tk.Email != "owner@example.org" || tk.Auth != nil {
+		t.Errorf("take: %v %+v", st, tk)
 	}
 	if st, _, _ := r.Take(ctx, l.Wait, now); st != users.Expired {
 		t.Errorf("taken twice: %v", st)

@@ -429,11 +429,16 @@ func serve(ctx context.Context, home, addr string, out io.Writer) error {
 	} else {
 		fmt.Fprintln(out, "SMTP_ADDR не задан: письма для входа пишутся в журнал (только для разработки)")
 	}
-	w, err := web.New(web.Config{Registry: reg, Mail: sender, Public: public, Catalog: s.Catalog, Log: out})
+	w, err := web.New(web.Config{Registry: reg, Mail: sender, Public: public, Catalog: s.Catalog, Log: out,
+		HasStaticToken: (*account.Account).HasToken})
 	if err != nil {
 		return err
 	}
 	s.SetWeb(w.Handler())
+	s.SetOAuth(func(ctx context.Context, token string) (string, string, time.Time, error) {
+		a, err := reg.VerifyAccess(ctx, token, time.Now())
+		return a.Account, a.Assistant, a.Expires, err
+	}, w.ResourceMetadataURL())
 	srv := &http.Server{Addr: addr, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
@@ -441,7 +446,7 @@ func serve(ctx context.Context, home, addr string, out io.Writer) error {
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
-	fmt.Fprintf(out, "MCP: http://%s/mcp (Authorization: Bearer <токен аккаунта>)\nВеб: %s\n", addr, public)
+	fmt.Fprintf(out, "MCP: %s/mcp (OAuth по письму или Bearer <токен аккаунта>)\nВеб: %s\n", public, public)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

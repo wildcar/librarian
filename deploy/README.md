@@ -21,8 +21,10 @@ curl -s https://lib.wildcar.ru/health
 
 Certificate: `certbot certonly --webroot -w /var/www/html -d lib.wildcar.ru` (the port-80 vhost keeps `/.well-known/acme-challenge/` open).
 
-Connecting an assistant: MCP URL `https://lib.wildcar.ru/mcp`, header `Authorization: Bearer <account token>`
-(`librarian token create --account <id>`; one token per account, a new one replaces the old).
+Connecting an assistant: add an MCP connector with URL `https://lib.wildcar.ru/mcp`; it opens the authorization
+page, the owner allows it by the letter (ADR-0007) and can disconnect it on `/assistants`. Clients without OAuth
+use the account token instead: header `Authorization: Bearer <token>` (`librarian token create --account <id>`;
+one token per account, a new one replaces the old).
 
 Web interface (ADR-0007): the same address, every path but `/mcp` and `/health`. The env file sets
 `LIBRARIAN_PUBLIC_URL=https://lib.wildcar.ru`, `SMTP_ADDR=127.0.0.1:25` (local Postfix, no login) and

@@ -32,6 +32,9 @@ type DocChange struct {
 	// YYYY-MM-DD, YYYY-MM, YYYY or --MM-DD.
 	Date      *string `json:"date,omitempty"`
 	ClearDate bool    `json:"clear_date,omitempty"` // forget the refined date: the derived one returns
+	// Actor names the assistant that made it (ADR-0007); kept in the log,
+	// not in the change itself.
+	Actor string `json:"-"`
 }
 
 var dateForm = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4}|--\d{2}-\d{2})$`)
@@ -154,7 +157,7 @@ func (c *Catalog) ChangeDocument(ctx context.Context, docID string, ch DocChange
 			docID, *ch.Date, ts, origin)
 	}
 	js, _ := json.Marshal(ch)
-	exec("INSERT INTO doc_changes (doc_id, origin, change, reason, at) VALUES (?, ?, ?, ?, ?)", docID, origin, string(js), reason, ts)
+	exec("INSERT INTO doc_changes (doc_id, origin, change, reason, at, actor) VALUES (?, ?, ?, ?, ?, ?)", docID, origin, string(js), reason, ts, ch.Actor)
 	if err != nil {
 		return fmt.Errorf("change %s: %w", docID, err)
 	}
@@ -223,12 +226,13 @@ func (c *Catalog) HasAssistantChanges(ctx context.Context, docID string) (bool, 
 // DocChangeEntry is one logged refinement.
 type DocChangeEntry struct {
 	Origin, Change, Reason string
+	Actor                  string // which assistant, for origin assistant
 	At                     time.Time
 }
 
 // DocChanges returns a document's refinement log, oldest first.
 func (c *Catalog) DocChanges(ctx context.Context, docID string) ([]DocChangeEntry, error) {
-	rows, err := c.db.QueryContext(ctx, "SELECT origin, change, reason, at FROM doc_changes WHERE doc_id = ? ORDER BY id", docID)
+	rows, err := c.db.QueryContext(ctx, "SELECT origin, change, reason, at, actor FROM doc_changes WHERE doc_id = ? ORDER BY id", docID)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +241,7 @@ func (c *Catalog) DocChanges(ctx context.Context, docID string) ([]DocChangeEntr
 	for rows.Next() {
 		var e DocChangeEntry
 		var at string
-		if err := rows.Scan(&e.Origin, &e.Change, &e.Reason, &at); err != nil {
+		if err := rows.Scan(&e.Origin, &e.Change, &e.Reason, &at, &e.Actor); err != nil {
 			return nil, err
 		}
 		e.At, _ = time.Parse(time.RFC3339Nano, at)

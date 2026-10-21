@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/wildcar/librarian/internal/account"
@@ -54,7 +55,9 @@ type Server struct {
 	catalogs map[string]*catalog.Catalog
 	servers  map[string]*mcp.Server
 
-	web http.Handler
+	web         http.Handler
+	oauth       OAuth
+	metadataURL string
 }
 
 // SetWeb gives every path but /health and /mcp to the web interface (ADR-0007).
@@ -76,15 +79,58 @@ func (s *Server) Close() error {
 	return errors.Join(errs...)
 }
 
-type ctxKey struct{}
+// OAuth checks a token issued to an assistant (ADR-0007): its account and
+// the assistant's name for the refinement log.
+type OAuth func(ctx context.Context, token string) (accountID, assistant string, expires time.Time, err error)
+
+// SetOAuth lets /mcp take assistants' OAuth tokens besides account tokens; a
+// 401 then points to the protected resource metadata.
+func (s *Server) SetOAuth(verify OAuth, metadataURL string) {
+	s.oauth, s.metadataURL = verify, metadataURL
+}
+
+const (
+	extraAccount   = "account"
+	extraAssistant = "assistant"
+)
+
+// verify accepts an account token (lib_…) or an assistant's access token.
+func (s *Server) verify(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+	if strings.HasPrefix(token, "lib_") {
+		a, err := account.Authenticate(s.home, token)
+		if err != nil {
+			return nil, auth.ErrInvalidToken
+		}
+		// Account tokens do not expire; they are replaced.
+		return &auth.TokenInfo{UserID: a.ID, Expiration: time.Now().Add(time.Hour),
+			Extra: map[string]any{extraAccount: a, extraAssistant: ""}}, nil
+	}
+	if s.oauth == nil {
+		return nil, auth.ErrInvalidToken
+	}
+	id, assistant, exp, err := s.oauth(ctx, token)
+	if err != nil {
+		return nil, auth.ErrInvalidToken
+	}
+	a, err := account.Open(s.home, id)
+	if err != nil {
+		return nil, auth.ErrInvalidToken
+	}
+	return &auth.TokenInfo{UserID: a.ID, Expiration: exp,
+		Extra: map[string]any{extraAccount: a, extraAssistant: assistant}}, nil
+}
 
 // Handler is the HTTP handler: /health is open, /mcp needs a token, the rest
 // is the web interface when one is set.
 func (s *Server) Handler() http.Handler {
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		a, _ := r.Context().Value(ctxKey{}).(*account.Account)
-		if a == nil {
+		ti := auth.TokenInfoFromContext(r.Context())
+		if ti == nil {
 			return nil // unreachable: the middleware rejects such requests
+		}
+		a, _ := ti.Extra[extraAccount].(*account.Account)
+		if a == nil {
+			return nil
 		}
 		srv, err := s.forAccount(a)
 		if err != nil {
@@ -92,6 +138,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		return srv
 	}, &mcp.StreamableHTTPOptions{Stateless: true})
+	protected := auth.RequireBearerToken(s.verify, &auth.RequireBearerTokenOptions{ResourceMetadataURL: s.metadataURL})(mcpHandler)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -101,14 +148,16 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/", s.web)
 	}
 	mux.Handle("/mcp", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		a, err := account.Authenticate(s.home, strings.TrimSpace(tok))
-		if !ok || err != nil {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="librarian"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		// Browser-based clients read the 401 to find the authorization server.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Expose-Headers", "WWW-Authenticate, Mcp-Session-Id")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID")
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		mcpHandler.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, a)))
+		protected.ServeHTTP(w, r)
 	}))
 	return mux
 }
@@ -159,6 +208,18 @@ func (s *Server) catalog(a *account.Account) (*catalog.Catalog, error) {
 }
 
 type tools struct{ cat *catalog.Catalog }
+
+// assistantOf names the assistant behind a call: the OAuth client, or the
+// account token when the call came with one.
+func assistantOf(req *mcp.CallToolRequest) string {
+	if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
+		return ""
+	}
+	if name, _ := req.Extra.TokenInfo.Extra[extraAssistant].(string); name != "" {
+		return name
+	}
+	return "постоянный токен"
+}
 
 // --- list_persons ------------------------------------------------------------
 
@@ -278,14 +339,14 @@ type updateOut struct {
 	Review      []string            `json:"review"`
 }
 
-func (t *tools) update(ctx context.Context, _ *mcp.CallToolRequest, in updateIn) (*mcp.CallToolResult, updateOut, error) {
+func (t *tools) update(ctx context.Context, req *mcp.CallToolRequest, in updateIn) (*mcp.CallToolResult, updateOut, error) {
 	if strings.TrimSpace(in.Reason) == "" {
 		return nil, updateOut{}, fmt.Errorf("reason обязателен: что сказал пользователь")
 	}
 	if in.Date != "" && in.ClearDate {
 		return nil, updateOut{}, fmt.Errorf("date и clear_date вместе не задаются")
 	}
-	ch := catalog.DocChange{Link: in.AddPersons, Unlink: in.DropPersons, ClearDate: in.ClearDate}
+	ch := catalog.DocChange{Link: in.AddPersons, Unlink: in.DropPersons, ClearDate: in.ClearDate, Actor: assistantOf(req)}
 	for _, s := range in.AddAttrs {
 		a, err := catalog.ParseAttr(s)
 		if err != nil {

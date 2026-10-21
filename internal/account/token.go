@@ -39,6 +39,12 @@ func (a *Account) NewToken() (string, error) {
 	return tok, nil
 }
 
+// HasToken says whether the account has a token.
+func (a *Account) HasToken() bool {
+	_, err := os.Stat(a.tokenPath())
+	return err == nil
+}
+
 // Authenticate returns the account a token belongs to.
 func Authenticate(home, token string) (*Account, error) {
 	rest, ok := strings.CutPrefix(token, tokenPrefix)

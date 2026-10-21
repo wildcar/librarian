@@ -1,7 +1,8 @@
 {{template "head" "Проверьте почту"}}{{template "bar"}}
 <main><div class="narrow card">
 <h1>Проверьте почту</h1>
-<p>Если для <b>{{.Email}}</b> есть аккаунт, на этот адрес ушло письмо со ссылкой. Откройте её и нажмите «Войти»: можно и на телефоне, эта страница войдёт сама.</p>
+{{if .Assistant}}<p>Если для <b>{{.Email}}</b> есть аккаунт, на этот адрес ушло письмо: ассистент «{{.Assistant}}» просит доступ. Откройте ссылку и нажмите «Разрешить»: можно и на телефоне, эта страница продолжит подключение сама.</p>
+{{else}}<p>Если для <b>{{.Email}}</b> есть аккаунт, на этот адрес ушло письмо со ссылкой. Откройте её и нажмите «Войти»: можно и на телефоне, эта страница войдёт сама.</p>{{end}}
 <p class="muted" id="state">Ждём подтверждения… Ссылка действует 15 минут.</p>
 <p><a href="/login">Ввести другой адрес</a></p>
 </div></main>
@@ -10,7 +11,7 @@
   var el=document.getElementById('state');
   function poll(){
     fetch('/login/wait',{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json()}).then(function(j){
-      if(j.state==='ok'){location.href='/';return}
+      if(j.state==='ok'){location.href=j.redirect||'/';return}
       if(j.state==='expired'){el.textContent='Время ссылки вышло. Запросите новое письмо.';return}
       setTimeout(poll,2000);
     }).catch(function(){setTimeout(poll,5000)});

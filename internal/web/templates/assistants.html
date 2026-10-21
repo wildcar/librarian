@@ -1,0 +1,15 @@
+{{template "head" "Ассистенты"}}{{template "bar" .V}}
+<main>
+<h1>Ассистенты</h1>
+<p class="muted">Чтобы подключить ассистента (Claude, ChatGPT и другие), добавьте в нём MCP-коннектор с адресом <code>{{.MCP}}</code>. Он откроет страницу входа, вы подтвердите доступ письмом.</p>
+{{if .Conns}}<table class="list">
+<tr><th>Ассистент</th><th>Куда</th><th>Подключён</th><th>Последний раз</th><th></th></tr>
+{{range .Conns}}<tr><td>{{.Name}}<br><span class="muted">{{.Email}}</span></td><td>{{.Host}}</td><td>{{.Created.Local.Format "02.01.2006 15:04"}}</td>
+<td>{{if .LastUsed.IsZero}}<span class="muted">ещё не обращался</span>{{else}}{{.LastUsed.Local.Format "02.01.2006 15:04"}}{{end}}</td>
+<td><form method="post" action="/assistants/{{.ID}}/disconnect"><button class="ghost">Отключить</button></form></td></tr>
+{{end}}</table>
+{{else}}<p>Подключённых ассистентов нет.</p>{{end}}
+{{if .StaticToken}}<h2>Постоянный токен</h2>
+<p class="muted">У аккаунта есть токен, выданный командой <code>librarian token create</code>: им пользуются скрипты и ассистенты без OAuth. Новый токен заменяет старый.</p>{{end}}
+</main>
+{{template "foot"}}

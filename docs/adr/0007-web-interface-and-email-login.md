@@ -53,9 +53,10 @@ A service-level registry `<home>/service.sqlite`, separate from account catalogs
 users    (email PRIMARY KEY, account, created)      email lower-cased; account = directory id
 logins   (hash, email, purpose, client_id, created, expires, used, state)
 sessions (hash, email, created, expires, last_seen) web sessions
-clients  (client_id, name, redirect_uris, created)  OAuth dynamic registrations (step 3)
-grants   (hash, kind, email, client_id, created, expires, last_used, revoked)
-         kind: access | refresh                     (step 3)
+clients  (client_id, secret_hash, name, redirect_uris, created)  dynamic registrations
+codes    (hash, request, email, expires, used, grant_id)          5 minutes, one use
+grants   (id, client_id, email, host, created, last_used, revoked) one per connected assistant
+tokens   (hash, grant_id, kind, expires, used)                    kind: access | refresh
 ```
 
 The account directory keeps its short id (`sergey`); the e-mail is the login and is
@@ -92,9 +93,14 @@ Rate limits per e-mail and per IP keep the form from being used to flood a mailb
 - `/oauth/register` — dynamic client registration; `client_name` and the redirect
   host are what the letter shows. The name is self-declared, so the letter shows the
   redirect host next to it (`claude.ai`), which the client cannot fake.
-- `/oauth/authorize` — the e-mail form and the letter above; PKCE S256 required.
+- `/oauth/authorize` — the e-mail form and the letter above; PKCE S256 required. A
+  browser that already has a web session gets one «Разрешить» button instead of a letter:
+  that session came from a letter. An unregistered redirect gets an error page, never a
+  redirect.
 - `/oauth/token` — code exchange and refresh. Access tokens live 1 hour, refresh tokens
-  90 days and rotate on use.
+  90 days and rotate on use. A code or refresh token used twice revokes the connection.
+  Public clients (PKCE only) and confidential ones (a secret) are both accepted; loopback
+  redirects match on any port (RFC 8252).
 - The web page «Ассистенты» lists the connected clients (name, host, last use) and
   revokes them.
 - The client's name goes into the refinement log: `update_document` records «ассистент

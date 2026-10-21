@@ -12,7 +12,8 @@ an MCP server from any AI assistant.
 
 ## Now
 
-- Web interface live at `https://lib.wildcar.ru` (ADR-0007): login by a letter (no e-mail bound yet: `librarian account email sergey <e-mail>`), the tree with chosen levels, the document page. Letters leave the local Postfix; without SPF/DKIM and PTR Gmail will refuse them, mail.ru took them before.
+- Assistants connect to `https://lib.wildcar.ru/mcp` by OAuth (ADR-0007): the letter names the assistant, «Ассистенты» lists and disconnects them, edits are signed with the assistant's name; checked live up to the authorization page, a real assistant not connected yet.
+- Web interface live at `https://lib.wildcar.ru` (ADR-0007): login by a letter (`wildcar@mail.ru` → `sergey`), the tree with chosen levels, the document page. Letters leave the local Postfix; without SPF/DKIM and PTR Gmail will refuse them, mail.ru took them before.
 - MCP `update_document`: an assistant refines persons, characteristics and date with the user's words as reason; marked until `librarian doc confirm | revert`.
 - Manual refinement per document: `librarian doc set | show` (person, characteristics, date), kept by index over batches, rules and models.
 - Batches (ADR-0006): the sample folder is batch 1, labelled ЕБВ — all 68 documents linked (60 by name before); characteristics per batch, searchable through MCP.
@@ -38,7 +39,6 @@ an MCP server from any AI assistant.
 ## Next
 
 - Mail: SPF, DKIM, DMARC and A `mail.wildcar.ru` published, Port25 check passes SPF and DKIM (2026-10-22); login e-mail wildcar@mail.ru bound to `sergey`, mail.ru accepts letters; Gmail accepts through the router's VPN exit 38.135.53.21 (PTR out.wildcar.ru); others get mail from 95.165.109.250 without PTR.
-- OAuth 2.1 for MCP with the same letter, the assistant named in it; «Ассистенты» page; the assistant's name in the refinement log.
 - Background pipeline in `serve` and `librarian run`; uploads: files, a server folder within allowed roots, cloud links (ADR-0007).
 - Characteristics read from documents by a model (kind of document, specialty, organisation kind), `source = model`, same table as batch characteristics.
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.

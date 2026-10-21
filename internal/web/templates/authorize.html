@@ -1,0 +1,24 @@
+{{template "head" "Подключение ассистента"}}{{template "bar"}}
+<main><div class="narrow card">
+<h1>Подключить ассистента?</h1>
+<p>Ассистент, который называет себя <b>«{{.Name}}»</b>, просит доступ к вашей библиотеке. Ответ уйдёт на: <b>{{.Host}}</b>.</p>
+<p class="muted">С доступом он сможет искать и читать документы и уточнять их; его правки помечаются, пока вы их не подтвердите. Отключить его можно на странице «Ассистенты».</p>
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<form method="post" action="/oauth/authorize">
+<input type="hidden" name="response_type" value="code">
+<input type="hidden" name="client_id" value="{{.R.ClientID}}">
+<input type="hidden" name="redirect_uri" value="{{.R.RedirectURI}}">
+<input type="hidden" name="state" value="{{.R.State}}">
+<input type="hidden" name="code_challenge" value="{{.R.Challenge}}">
+<input type="hidden" name="code_challenge_method" value="S256">
+<input type="hidden" name="resource" value="{{.R.Resource}}">
+<input type="hidden" name="scope" value="{{.R.Scope}}">
+{{if .Session}}<p>Вы вошли как <b>{{.Session}}</b>.</p>
+<div class="row"><button name="action" value="allow">Разрешить</button><button class="ghost" name="action" value="deny" formnovalidate>Отказать</button></div>
+{{else}}<p>Введите почту аккаунта: мы пришлём письмо, в нём вы разрешите доступ.</p>
+<p><input type="email" name="email" value="{{.Email}}" placeholder="you@example.org" required autofocus autocomplete="email"></p>
+<div class="row"><button name="action" value="email">Прислать письмо</button><button class="ghost" name="action" value="deny" formnovalidate>Отказать</button></div>
+{{end}}
+</form>
+</div></main>
+{{template "foot"}}

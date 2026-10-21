@@ -40,8 +40,10 @@ type Config struct {
 	Mail     mail.Sender
 	Public   string // the address people open, e.g. https://lib.wildcar.ru
 	Catalog  func(*account.Account) (*catalog.Catalog, error)
-	Now      func() time.Time
-	Log      io.Writer
+	// HasStaticToken says whether the account has a token made by the CLI.
+	HasStaticToken func(*account.Account) bool
+	Now            func() time.Time
+	Log            io.Writer
 }
 
 // Server serves the web pages.
@@ -88,6 +90,20 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /login/confirm", s.confirm)
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("GET /doc/{id}", s.authed(s.document))
+	mux.HandleFunc("GET /assistants", s.authed(s.assistants))
+	mux.HandleFunc("POST /assistants/{id}/disconnect", s.authed(s.disconnect))
+
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource", s.protectedResource)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", s.protectedResource)
+	mux.HandleFunc("GET /.well-known/oauth-authorization-server", s.authServer)
+	mux.HandleFunc("GET /.well-known/openid-configuration", s.authServer)
+	mux.HandleFunc("OPTIONS /.well-known/", preflight)
+	mux.HandleFunc("POST /oauth/register", s.register)
+	mux.HandleFunc("OPTIONS /oauth/register", preflight)
+	mux.HandleFunc("GET /oauth/authorize", s.authorizeForm)
+	mux.HandleFunc("POST /oauth/authorize", s.authorize)
+	mux.HandleFunc("POST /oauth/token", s.token)
+	mux.HandleFunc("OPTIONS /oauth/token", preflight)
 	mux.HandleFunc("GET /{$}", s.authed(s.tree))
 	return s.guard(mux)
 }
@@ -102,7 +118,10 @@ func (s *Server) guard(h http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'")
-		if r.Method == http.MethodPost {
+		// Registration and the token endpoint are called by assistants, often
+		// from their own pages; no cookie opens anything there.
+		api := r.URL.Path == "/oauth/register" || r.URL.Path == "/oauth/token"
+		if r.Method == http.MethodPost && !api {
 			if o := r.Header.Get("Origin"); o != "" && o != s.origin {
 				http.Error(w, "чужой источник запроса", http.StatusForbidden)
 				return
@@ -230,28 +249,38 @@ func (s *Server) letter(l users.Login, req users.Request, now time.Time) string 
 // loginWait answers the page that waits for the button in the letter; once
 // pressed, this browser gets its session.
 func (s *Server) loginWait(w http.ResponseWriter, r *http.Request) {
-	state := "expired"
+	out := map[string]string{"state": "expired"}
 	if c, err := r.Cookie(waitCookie); err == nil {
-		st, email, err := s.cfg.Registry.Take(r.Context(), c.Value, s.cfg.Now())
+		st, tk, err := s.cfg.Registry.Take(r.Context(), c.Value, s.cfg.Now())
 		if err != nil {
 			s.fail(w, err)
 			return
 		}
-		switch st {
-		case users.Waiting:
-			state = "waiting"
-		case users.Confirmed:
-			if err := s.startSession(w, r, email); err != nil {
+		switch {
+		case st == users.Waiting:
+			out["state"] = "waiting"
+		case st == users.Confirmed:
+			to, err := s.finish(w, r, tk)
+			if err != nil {
 				s.fail(w, err)
 				return
 			}
 			s.clear(w, waitCookie)
-			state = "ok"
+			out["state"], out["redirect"] = "ok", to
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	json.NewEncoder(w).Encode(map[string]string{"state": state})
+	json.NewEncoder(w).Encode(out)
+}
+
+// finish completes a confirmed login in the browser that asked: a web
+// session, or for an assistant the way back to it with a code.
+func (s *Server) finish(w http.ResponseWriter, r *http.Request, tk users.Taken) (string, error) {
+	if tk.Auth != nil {
+		return s.granted(r.Context(), tk.Email, *tk.Auth)
+	}
+	return "/", s.startSession(w, r, tk.Email)
 }
 
 func (s *Server) confirmForm(w http.ResponseWriter, r *http.Request) {
@@ -263,25 +292,53 @@ func (s *Server) confirmForm(w http.ResponseWriter, r *http.Request) {
 			"Text": "Она устарела или уже использована. Запросите новое письмо на странице входа."})
 		return
 	}
-	s.render(w, "confirm", map[string]any{"Link": link, "P": p, "When": p.Created.Local().Format("02.01.2006 15:04")})
+	data := map[string]any{"Link": link, "P": p, "When": p.Created.Local().Format("02.01.2006 15:04")}
+	if p.Auth != nil {
+		c, err := s.cfg.Registry.Client(r.Context(), p.Auth.ClientID)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		data["Assistant"], data["Host"] = c.Name, users.Host(p.Auth.RedirectURI)
+	}
+	s.render(w, "confirm", data)
 }
 
 // confirm is the button: the login is granted here, never on opening the
 // link. The browser that pressed it is logged in too; the one that asked
 // learns it on its next poll.
 func (s *Server) confirm(w http.ResponseWriter, r *http.Request) {
-	email, err := s.cfg.Registry.Confirm(r.Context(), r.FormValue("t"), s.cfg.Now())
+	p, err := s.cfg.Registry.Confirm(r.Context(), r.FormValue("t"), s.cfg.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusGone)
 		s.render(w, "message", map[string]any{"Title": "Ссылка не действует",
 			"Text": "Она устарела или уже использована. Запросите новое письмо на странице входа."})
 		return
 	}
-	if err := s.startSession(w, r, email); err != nil {
-		s.fail(w, err)
+	if p.Auth == nil {
+		if err := s.startSession(w, r, p.Email); err != nil {
+			s.fail(w, err)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	// An assistant: the code goes to the browser that asked. When that is
+	// this one, continue right here.
+	if c, err := r.Cookie(waitCookie); err == nil {
+		if st, tk, err := s.cfg.Registry.Take(r.Context(), c.Value, s.cfg.Now()); err == nil && st == users.Confirmed {
+			to, err := s.finish(w, r, tk)
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			s.clear(w, waitCookie)
+			http.Redirect(w, r, to, http.StatusSeeOther)
+			return
+		}
+	}
+	s.render(w, "message", map[string]any{"Title": "Доступ разрешён",
+		"Text": "Вернитесь в окно, где вы вводили почту: оно само продолжит подключение ассистента."})
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {

@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/mail"
@@ -31,6 +32,7 @@ const (
 	LinksPerHour  = 5 // letters per e-mail per hour
 	PurposeWeb    = "web"
 	PurposeDirect = "direct" // made by the administrator; logs in the browser that opens it
+	PurposeMCP    = "mcp"    // an assistant asks for access (OAuth, ADR-0007)
 )
 
 // ErrUnknown covers an unknown e-mail, link or session; callers must not tell
@@ -68,6 +70,41 @@ var schema = []string{
 		expires   TEXT NOT NULL,
 		last_seen TEXT NOT NULL
 	);`,
+	// 2: OAuth for assistants: registered clients, authorization codes,
+	// grants (one per connected assistant) and their tokens.
+	`ALTER TABLE logins ADD COLUMN oauth TEXT;  -- JSON AuthRequest of an assistant
+	CREATE TABLE clients (
+		client_id     TEXT PRIMARY KEY,
+		secret_hash   TEXT,                   -- NULL for a public client (PKCE only)
+		name          TEXT NOT NULL,
+		redirect_uris TEXT NOT NULL,          -- JSON array
+		created       TEXT NOT NULL
+	);
+	CREATE TABLE codes (
+		hash      TEXT PRIMARY KEY,
+		request   TEXT NOT NULL,              -- JSON AuthRequest
+		email     TEXT NOT NULL,
+		expires   TEXT NOT NULL,
+		used      TEXT,
+		grant_id  INTEGER
+	);
+	CREATE TABLE grants (
+		id        INTEGER PRIMARY KEY,
+		client_id TEXT NOT NULL REFERENCES clients(client_id),
+		email     TEXT NOT NULL,
+		host      TEXT NOT NULL,              -- the redirect host, which the client cannot fake
+		created   TEXT NOT NULL,
+		last_used TEXT,
+		revoked   TEXT
+	);
+	CREATE TABLE tokens (
+		hash     TEXT PRIMARY KEY,
+		grant_id INTEGER NOT NULL REFERENCES grants(id),
+		kind     TEXT NOT NULL,               -- access | refresh
+		expires  TEXT NOT NULL,
+		used     TEXT                         -- a refresh token is used once
+	);
+	CREATE INDEX tokens_grant ON tokens(grant_id);`,
 }
 
 // Registry is the opened service registry.
@@ -229,6 +266,7 @@ type Request struct {
 	Purpose string
 	IP      string
 	Agent   string
+	Auth    *AuthRequest // for PurposeMCP
 }
 
 // Login is a started login: Link goes into the letter, Wait stays with the
@@ -271,8 +309,16 @@ func (r *Registry) StartLogin(ctx context.Context, email string, req Request, at
 		}
 		l.Wait, waitHash = wait, h
 	}
-	_, err = r.db.ExecContext(ctx, `INSERT INTO logins (link_hash, wait_hash, email, purpose, ip, agent, created, expires)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, linkHash, waitHash, email, req.Purpose, req.IP, req.Agent, stamp(at), stamp(l.Expires))
+	var oauth any
+	if req.Auth != nil {
+		js, err := json.Marshal(req.Auth)
+		if err != nil {
+			return Login{}, err
+		}
+		oauth = string(js)
+	}
+	_, err = r.db.ExecContext(ctx, `INSERT INTO logins (link_hash, wait_hash, email, purpose, ip, agent, created, expires, oauth)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, linkHash, waitHash, email, req.Purpose, req.IP, req.Agent, stamp(at), stamp(l.Expires), oauth)
 	if err != nil {
 		return Login{}, err
 	}
@@ -288,15 +334,16 @@ type Pending struct {
 	IP      string
 	Agent   string
 	Created time.Time
+	Auth    *AuthRequest // what an assistant asked for
 }
 
 func (r *Registry) live(ctx context.Context, link string, at time.Time) (Pending, error) {
 	var p Pending
 	var created string
-	var confirmed sql.NullString
+	var confirmed, oauth sql.NullString
 	// A link dies with its e-mail's binding.
-	err := r.db.QueryRowContext(ctx, `SELECT email, purpose, ip, agent, created, confirmed FROM logins
-		WHERE link_hash = ? AND expires > ? AND email IN (SELECT email FROM users)`, hash(link), stamp(at)).Scan(&p.Email, &p.Purpose, &p.IP, &p.Agent, &created, &confirmed)
+	err := r.db.QueryRowContext(ctx, `SELECT email, purpose, ip, agent, created, confirmed, oauth FROM logins
+		WHERE link_hash = ? AND expires > ? AND email IN (SELECT email FROM users)`, hash(link), stamp(at)).Scan(&p.Email, &p.Purpose, &p.IP, &p.Agent, &created, &confirmed, &oauth)
 	if errors.Is(err, sql.ErrNoRows) || confirmed.Valid {
 		return Pending{}, ErrUnknown
 	}
@@ -304,7 +351,21 @@ func (r *Registry) live(ctx context.Context, link string, at time.Time) (Pending
 		return Pending{}, err
 	}
 	p.Created, _ = time.Parse(time.RFC3339, created)
+	if p.Auth, err = parseAuth(oauth); err != nil {
+		return Pending{}, err
+	}
 	return p, nil
+}
+
+func parseAuth(s sql.NullString) (*AuthRequest, error) {
+	if !s.Valid {
+		return nil, nil
+	}
+	var a AuthRequest
+	if err := json.Unmarshal([]byte(s.String), &a); err != nil {
+		return nil, err
+	}
+	return &a, nil
 }
 
 // Peek shows a link's request without using it: opening the letter's link
@@ -313,20 +374,26 @@ func (r *Registry) Peek(ctx context.Context, link string, at time.Time) (Pending
 	return r.live(ctx, link, at)
 }
 
-// Confirm uses a link (the owner pressed the button) and returns its e-mail.
-func (r *Registry) Confirm(ctx context.Context, link string, at time.Time) (string, error) {
+// Confirm uses a link (the owner pressed the button) and returns what it was for.
+func (r *Registry) Confirm(ctx context.Context, link string, at time.Time) (Pending, error) {
 	p, err := r.live(ctx, link, at)
 	if err != nil {
-		return "", err
+		return Pending{}, err
 	}
 	res, err := r.db.ExecContext(ctx, `UPDATE logins SET confirmed = ? WHERE link_hash = ? AND confirmed IS NULL`, stamp(at), hash(link))
 	if err != nil {
-		return "", err
+		return Pending{}, err
 	}
 	if n, _ := res.RowsAffected(); n != 1 {
-		return "", ErrUnknown
+		return Pending{}, ErrUnknown
 	}
-	return p.Email, nil
+	return p, nil
+}
+
+// Taken is a confirmed login as the waiting browser receives it.
+type Taken struct {
+	Email string
+	Auth  *AuthRequest // an assistant's request, to answer with a code
 }
 
 // WaitState is what the waiting browser learns when it asks.
@@ -340,33 +407,37 @@ const (
 
 // Take tells the waiting browser whether its login was confirmed; the first
 // time it was, it returns the e-mail and marks the login taken.
-func (r *Registry) Take(ctx context.Context, wait string, at time.Time) (WaitState, string, error) {
+func (r *Registry) Take(ctx context.Context, wait string, at time.Time) (WaitState, Taken, error) {
 	var email, expires string
-	var confirmed, taken sql.NullString
-	err := r.db.QueryRowContext(ctx, `SELECT email, expires, confirmed, taken FROM logins WHERE wait_hash = ?`, hash(wait)).
-		Scan(&email, &expires, &confirmed, &taken)
+	var confirmed, taken, oauth sql.NullString
+	err := r.db.QueryRowContext(ctx, `SELECT email, expires, confirmed, taken, oauth FROM logins WHERE wait_hash = ?
+		AND email IN (SELECT email FROM users)`, hash(wait)).Scan(&email, &expires, &confirmed, &taken, &oauth)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Expired, "", nil
+		return Expired, Taken{}, nil
 	}
 	if err != nil {
-		return Expired, "", err
+		return Expired, Taken{}, err
 	}
 	switch {
 	case taken.Valid:
-		return Expired, "", nil
+		return Expired, Taken{}, nil
 	case confirmed.Valid:
 		res, err := r.db.ExecContext(ctx, `UPDATE logins SET taken = ? WHERE wait_hash = ? AND taken IS NULL`, stamp(at), hash(wait))
 		if err != nil {
-			return Expired, "", err
+			return Expired, Taken{}, err
 		}
 		if n, _ := res.RowsAffected(); n != 1 {
-			return Expired, "", nil
+			return Expired, Taken{}, nil
 		}
-		return Confirmed, email, nil
+		auth, err := parseAuth(oauth)
+		if err != nil {
+			return Expired, Taken{}, err
+		}
+		return Confirmed, Taken{Email: email, Auth: auth}, nil
 	case expires <= stamp(at):
-		return Expired, "", nil
+		return Expired, Taken{}, nil
 	}
-	return Waiting, "", nil
+	return Waiting, Taken{}, nil
 }
 
 // NewSession starts a web session for an e-mail and returns its cookie value.

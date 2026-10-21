@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Assistants connect by letter (OAuth for MCP)
+- What: the service is its own OAuth 2.1 server (metadata, dynamic registration, authorize by the letter or a web session's button, token with PKCE and rotating refresh tokens); `/mcp` behind the SDK's `RequireBearerToken` takes OAuth and account tokens; «Ассистенты» page lists and disconnects; refinements log the assistant (`doc_changes.actor`, catalog migration 12).
+- Why: owner wants assistants connected by e-mail like the web, with the assistant named in the letter.
+- Files: internal/users/oauth.go, internal/users/users.go, internal/web/oauth.go, internal/web/web.go, internal/web/templates/*, internal/mcpserver/server.go, internal/catalog/catalog.go, internal/catalog/manual.go, internal/account/token.go, internal/report/report.go, cmd/librarian/main.go
+- Next: connect Claude for real; background pipeline and uploads.
+
 ## 2026-10-21 · Web interface: login by letter and the document tree
 - What: ADR-0007 (web + e-mail login for people and assistants, OAuth for MCP next); `service.sqlite` registry (e-mails, one-time links, sessions); letters over SMTP to the local Postfix; web login (button on the link page, the asking browser polls); tree with chosen levels and the document page; `/mcp` routed explicitly; `account email|unbind|list`, `login-link`.
 - Why: owner wants uploads and an overview in a browser and one e-mail login for the web and assistants.

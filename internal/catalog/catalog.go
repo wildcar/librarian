@@ -215,6 +215,9 @@ var schema = []string{
 		at     TEXT NOT NULL
 	);
 	CREATE INDEX doc_changes_doc ON doc_changes(doc_id);`,
+	// 12: which assistant made a refinement (ADR-0007): the OAuth client's
+	// name and host, or the account token.
+	`ALTER TABLE doc_changes ADD COLUMN actor TEXT NOT NULL DEFAULT '';`,
 }
 
 // Catalog is an open account catalog.

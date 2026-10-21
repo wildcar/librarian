@@ -204,6 +204,9 @@ func Doc(w io.Writer, d DocState) {
 		who := "владелец"
 		if ch.Origin == catalog.OriginAssistant {
 			who = "ассистент"
+			if ch.Actor != "" {
+				who += " " + ch.Actor
+			}
 		}
 		line := fmt.Sprintf("Правка %s, %s: %s", ch.At.Local().Format("2006-01-02 15:04"), who, ch.Change)
 		if ch.Reason != "" {
