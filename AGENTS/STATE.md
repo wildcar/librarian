@@ -12,7 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
-- Document date is the creation date (`librarian date`, run after `digest`, before `index`): on the sample 62 of 68 confirmed by a quote, 4 without one, 2 rejected and dated from the summary; `date_partial` for dates without a day or year; $0.008.
+- Document date is the creation date (`librarian date`, run after `digest`, before `index`): on the sample 64 of 68 confirmed by a quote, 2 without one, 2 rejected and dated from the summary; `date_partial` for dates without a day or year; $0.008.
 - An assistant worked through `lib.wildcar.ru` (2026-10-21); its feedback led to paging and absence search: `search_documents` returns `total`/`next_offset`, lists all without words, `missing: [date|person]`; `review` lists kinds of open checks.
 - Service live at `https://lib.wildcar.ru/mcp` (systemd + Apache + Let's Encrypt, files in `deploy/`); checked over HTTPS: initialize, tools/list, list_persons, search, wrong token 401.
 - Ubuntu server `homesrv` is dev and prod (toolchain, user `librarian`, `/var/lib/librarian`, env files). Sample run there (account `sergey`, from Nextcloud): 156 pages OCR $1.38, 1 flagged page; 68 documents, split $0.23, 0 reviews; digest $0.063, 1 flagged summary; 60 of 68 linked to the person.

@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-21 · Date next to a signature is the document's date
+- What: dating prompt rule (pipeline 3) and the year restored from the quote for a --MM-DD answer (pipeline 4); sample 64 of 68 dated by quote.
+- Why: owner looked at two consultation forms left undated: the handwritten date beside the signature is the conclusion date.
+- Files: internal/dating/dating.go, internal/dating/dating_test.go, AGENTS/SPEC.md, AGENTS/MEMORY.md
+- Next: open characteristics and tags; one command for the whole pipeline.
+
 ## 2026-10-21 · Document date is the creation date, confirmed by a quote
 - What: `librarian date` (internal/dating): a model names the creation date, a quote and its basis; the quote must hold the date; partial dates kept; index uses it, the summary only as a fallback; MCP returns date_partial, date_source, a review reason for rejected dates.
 - Why: a referral or report with two dates in the summary's first sentence stayed undated; owner: the creation date is the main date.

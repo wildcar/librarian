@@ -24,7 +24,9 @@ import (
 
 // Pipeline is the version of this stage; a higher one rereads every document.
 // 2: a quote's edge punctuation no longer decides whether it occurs.
-const Pipeline = 2
+// 3: a date at the end of a record or next to a signature is the creation date.
+// 4: a year the model dropped is taken back from its quote.
+const Pipeline = 4
 
 // DefaultModel is the text-layer model (ADR-0005): it already reads these texts.
 const DefaultModel = layers.DefaultModel
@@ -34,10 +36,11 @@ const DefaultModel = layers.DefaultModel
 const Prompt = `Ниже текст документа. Найди дату создания документа: когда его составили, выдали, подписали, оформили или распечатали.
 - Это не дата события, на которое документ ссылается (запись на приём, госпитализация, поездка, рейс, начало или конец срока действия, срок оплаты), не дата рождения, не дата лицензии, приказа или формы бланка.
 - Если документ сам фиксирует событие (протокол исследования, осмотр, заключение, чек, акт) и отдельной даты оформления нет, дата этого события и есть дата создания.
+- Дата, написанная в конце записи или рядом с подписью, — это дата создания документа, даже если печатное поле даты бланка пустое и даже если дата стоит не в своём поле. При распознавании подпись часто видна как «[подпись]», «[?]» или неразборчивый текст.
 - Если дат оформления несколько (составлен и распечатан), бери дату составления.
 - Если у даты нет года или дня, верни сколько есть: ГГГГ-ММ, ГГГГ или --ММ-ДД. Не угадывай недостающее, не бери год из других дат документа.
 Ответь только JSON: {"date": "ГГГГ-ММ-ДД", "quote": "фрагмент текста ровно как в документе, где написана эта дата", "basis": "stated"}
-basis: "stated" — дата названа датой документа или стоит в его реквизитах («от», «дата», подпись); "event" — это дата события, которое документ фиксирует.
+basis: "stated" — дата названа датой документа или стоит в его реквизитах («от», «дата», в конце записи, рядом с подписью); "event" — это дата события, которое документ фиксирует.
 Если даты создания в тексте нет, ответь {"date": null}.
 
 `
@@ -163,12 +166,33 @@ func (s *Stage) one(ctx context.Context, o Options, d catalog.DateInput) catalog
 	if r.Basis != "stated" && r.Basis != "event" {
 		r.Basis = ""
 	}
+	r.Date = Complete(r.Date, r.Quote)
 	if err := Confirm(r.Date, r.Quote, d.Essential); err != nil {
 		r.Status, r.Reason = catalog.DateRejected, err.Error()
 		return r
 	}
 	r.Status = catalog.DateDone
 	return r
+}
+
+// Complete fills in the year a model dropped from a --MM-DD date when its
+// quote holds exactly one full date and that date has the same day and
+// month («29. X. 19г.» answered as --10-29). The year comes from the quote,
+// so nothing is guessed; any other date is returned unchanged.
+func Complete(date, quote string) string {
+	m := monthDay.FindStringSubmatch(date)
+	if m == nil {
+		return date
+	}
+	ds := layers.Dates(quote)
+	if len(ds) != 1 || ds[0][0] != atoi(m[2]) || ds[0][1] != atoi(m[1]) {
+		return date
+	}
+	year := 2000 + ds[0][2]
+	if year > time.Now().Year()+1 {
+		year -= 100
+	}
+	return fmt.Sprintf("%04d-%s-%s", year, m[1], m[2])
 }
 
 var (

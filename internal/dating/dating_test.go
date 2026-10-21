@@ -47,6 +47,21 @@ func TestConfirm(t *testing.T) {
 	}
 }
 
+func TestComplete(t *testing.T) {
+	for _, tc := range []struct{ date, quote, want string }{
+		{"--10-29", "29. X. 19г", "2019-10-29"},
+		{"--10-29", "29.10.1987", "1987-10-29"},
+		{"--10-08", "8 октября", "--10-08"},               // no year in the quote: stays partial
+		{"--10-29", "28.10.2019", "--10-29"},              // another day: left for the check to refuse
+		{"--10-29", "29.10.2019 и 29.10.2020", "--10-29"}, // two years: not ours to choose
+		{"2019-10-29", "29.10.2019", "2019-10-29"},
+	} {
+		if got := dating.Complete(tc.date, tc.quote); got != tc.want {
+			t.Errorf("Complete(%q, %q) = %q, want %q", tc.date, tc.quote, got, tc.want)
+		}
+	}
+}
+
 type scripted map[string]string // a word of the text → the model's reply
 
 func (s scripted) Chat(_ context.Context, r router.ChatRequest) (router.ChatReply, error) {
