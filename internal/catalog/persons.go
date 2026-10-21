@@ -76,7 +76,7 @@ func (c *Catalog) Persons(ctx context.Context) ([]Person, error) {
 }
 
 // LinkPerson attaches a person to a document. A manual link is never
-// replaced by a rule link.
+// replaced.
 func (c *Catalog) LinkPerson(ctx context.Context, docID, code, method, reason string) error {
 	_, err := c.db.ExecContext(ctx, `
 		INSERT INTO doc_persons (doc_id, code, method, reason) VALUES (?, ?, ?, ?)
@@ -86,12 +86,6 @@ func (c *Catalog) LinkPerson(ctx context.Context, docID, code, method, reason st
 		return fmt.Errorf("link %s to %s: %w", code, docID, err)
 	}
 	return nil
-}
-
-// ClearRuleLinks removes the rule links of a document before they are redone.
-func (c *Catalog) ClearRuleLinks(ctx context.Context, docID string) error {
-	_, err := c.db.ExecContext(ctx, "DELETE FROM doc_persons WHERE doc_id = ? AND method = 'rule'", docID)
-	return err
 }
 
 // DocPersons returns the codes linked to a document.
@@ -184,15 +178,18 @@ type SearchQuery struct {
 	Person   string // person code
 	DateFrom string // YYYY-MM-DD, inclusive
 	DateTo   string
-	// Missing names characteristics (MissingDate, MissingPerson) that may be
-	// absent: with a filter on that characteristic, a document without it
-	// also passes; without a filter, only documents lacking it pass.
+	Attrs    []Attr // every one must hold
+	Batch    int64  // documents that came in this batch; 0 = any
+	// Missing names characteristics that may be absent: MissingDate,
+	// MissingPerson or any characteristic key. With a filter on that
+	// characteristic, a document without it also passes; without a filter,
+	// only documents lacking it pass.
 	Missing []string
 	Offset  int
 	Limit   int // 1..50, 20 by default
 }
 
-// Characteristics a search can ask to be absent.
+// Characteristics of their own; every other name is a characteristic key.
 const (
 	MissingDate   = "date"
 	MissingPerson = "person"
@@ -206,6 +203,8 @@ type Hit struct {
 	Persons []string
 	Pages   int
 	Summary string
+	Attrs   map[string][]string
+	Batches []int64
 	Review  []string // what the owner still has to check; empty when nothing
 }
 
@@ -214,10 +213,9 @@ type Hit struct {
 func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error) {
 	missing := map[string]bool{}
 	for _, m := range q.Missing {
-		if m != MissingDate && m != MissingPerson {
-			return nil, 0, fmt.Errorf("search: unknown characteristic %q", m)
+		if k := AttrKey(m); k != "" {
+			missing[k] = true
 		}
-		missing[m] = true
 	}
 	where := []string{"t.status IN ('done', 'flagged')"}
 	args := []any{}
@@ -263,6 +261,37 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 		where = append(where, noDate)
 	}
 
+	// Characteristics: grouped by key, so "missing" can widen one key's filter.
+	byKey := map[string][]string{}
+	for _, a := range q.Attrs {
+		k := AttrKey(a.Key)
+		byKey[k] = append(byKey[k], a.Value)
+	}
+	for k, vs := range byKey {
+		var all []string
+		for _, v := range vs {
+			all = append(all, "d.id IN (SELECT doc_id FROM doc_attrs WHERE key = ? AND value = ?)")
+			args = append(args, k, v)
+		}
+		c := strings.Join(all, " AND ")
+		if missing[k] {
+			c = "(" + c + " OR d.id NOT IN (SELECT doc_id FROM doc_attrs WHERE key = ?))"
+			args = append(args, k)
+		}
+		where = append(where, c)
+	}
+	for k := range missing {
+		if k == MissingDate || k == MissingPerson || byKey[k] != nil {
+			continue
+		}
+		where = append(where, "d.id NOT IN (SELECT doc_id FROM doc_attrs WHERE key = ?)")
+		args = append(args, k)
+	}
+	if q.Batch != 0 {
+		where = append(where, "d.sha256 IN (SELECT sha256 FROM batch_originals WHERE batch_id = ?)")
+		args = append(args, q.Batch)
+	}
+
 	cond := " FROM " + from + " WHERE " + strings.Join(where, " AND ")
 	var total int
 	if err := c.db.QueryRowContext(ctx, "SELECT COUNT(*)"+cond, args...).Scan(&total); err != nil {
@@ -295,6 +324,12 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 		if out[i].Persons, err = c.DocPersons(ctx, out[i].DocID); err != nil {
 			return nil, 0, err
 		}
+		if out[i].Attrs, err = c.DocAttrs(ctx, out[i].DocID); err != nil {
+			return nil, 0, err
+		}
+		if out[i].Batches, err = c.DocBatches(ctx, out[i].DocID); err != nil {
+			return nil, 0, err
+		}
 		if out[i].Review, err = c.DocReview(ctx, out[i].DocID); err != nil {
 			return nil, 0, err
 		}
@@ -303,8 +338,9 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 }
 
 // DocReview says what the owner still has to check in a document: pages the
-// second reading doubted, a split the rules disputed, a creation date the
-// text did not confirm, failed summary checks.
+// second reading doubted, a split the rules disputed, a person in the text
+// other than the batch's, a creation date the text did not confirm, failed
+// summary checks.
 // The reasons name the kind of problem only, never the text that caused it,
 // because a leak check's hit is the very personal data it caught.
 func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error) {
@@ -345,6 +381,15 @@ func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error)
 	err = c.db.QueryRowContext(ctx, "SELECT status FROM doc_dates WHERE doc_id = ?", docID).Scan(&dateStatus)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("review %s: %w", docID, err)
+	}
+	var stray int
+	err = c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM doc_persons WHERE doc_id = ? AND method = 'rule'
+		AND EXISTS (SELECT 1 FROM doc_persons WHERE doc_id = ? AND method = 'batch')`, docID, docID).Scan(&stray)
+	if err != nil {
+		return nil, fmt.Errorf("review %s: %w", docID, err)
+	}
+	if stray > 0 {
+		out = append(out, "человек: в тексте найден не тот человек, что указан у пачки")
 	}
 	if dateStatus.String == DateRejected {
 		out = append(out, "дата: названная моделью дата не подтвердилась текстом")

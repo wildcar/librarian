@@ -1,7 +1,9 @@
 // Command librarian catalogues documents for isolated accounts (ADR-0004).
 //
 //	librarian [--home DIR] account create <id>
-//	librarian [--home DIR] ingest  --account <id> [--workers N] <folder>
+//	librarian [--home DIR] ingest  --account <id> [--workers N] [batch labels] [--batch-label L] <folder>
+//	librarian [--home DIR] batch   list --account <id>
+//	librarian [--home DIR] batch   set  --account <id> [batch labels] [--no-person] [--unset KEY[=VALUE]]... <batch id>
 //	librarian [--home DIR] dupes   --account <id>
 //	librarian [--home DIR] stats   --account <id>
 //	librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run] [--no-check]
@@ -17,6 +19,9 @@
 //	librarian [--home DIR] serve   [--addr 127.0.0.1:8090]
 //	librarian [--home DIR] text    --account <id> <sha256 prefix>
 //	librarian version
+//
+// Batch labels (ADR-0006): --person CODE (repeatable; with --name, --label,
+// --birth, --alias a new person is created) and --attr KEY=VALUE (repeatable).
 //
 // The data root is --home or LIBRARIAN_HOME; every account lives in its own
 // directory under it. extract reads ROUTER_URL and ROUTER_TOKEN for the
@@ -34,6 +39,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,7 +62,9 @@ var version = "dev"
 
 const usage = `usage:
   librarian [--home DIR] account create <id>
-  librarian [--home DIR] ingest --account <id> [--workers N] <folder>
+  librarian [--home DIR] ingest --account <id> [--workers N] [labels] [--batch-label L] <folder>
+  librarian [--home DIR] batch list --account <id>
+  librarian [--home DIR] batch set  --account <id> [labels] [--no-person] [--unset KEY[=VALUE]]... <batch id>
   librarian [--home DIR] dupes  --account <id>
   librarian [--home DIR] stats  --account <id>
   librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run] [--no-check]
@@ -73,6 +81,10 @@ const usage = `usage:
   librarian [--home DIR] serve  [--addr 127.0.0.1:8090]
   librarian [--home DIR] text   --account <id> <sha256 prefix>
   librarian version
+
+labels: --person CODE (repeatable) — whose documents these are; with --name "..." [--label L]
+        [--birth YYYY-MM-DD] [--alias A]... a new person is created under CODE;
+        --attr KEY=VALUE (repeatable) — characteristics every document of the batch gets.
 
 The data root is --home or the LIBRARIAN_HOME environment variable.`
 
@@ -137,7 +149,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 			return usageError{err.Error()}
 		}
 		return serve(ctx, *home, *addr, out)
-	case "token", "person", "index":
+	case "token", "person", "index", "batch":
 		return accountAdmin(ctx, *home, cmd, rest, out)
 	case "ingest", "dupes", "stats", "extract", "verify", "text", "split", "docs", "digest", "date", "show":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
@@ -149,6 +161,9 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		dryRun := fs.Bool("dry-run", false, "extract: count pages and estimate cost only")
 		noCheck := fs.Bool("no-check", false, "extract: skip the tesseract second reading")
 		layer := fs.String("layer", "summary", "show: summary | essential | verbatim")
+		batchLabel := fs.String("batch-label", "", "ingest: a name for the batch")
+		var labels batchFlags
+		labels.register(fs)
 		if err := fs.Parse(rest); err != nil {
 			return usageError{err.Error()}
 		}
@@ -169,11 +184,37 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 			if fs.NArg() != 1 {
 				return usageError{"expected one folder"}
 			}
+			attrs, err := labels.check(ctx, c)
+			if err != nil {
+				return err
+			}
 			rep, err := intake.Folder(ctx, c, fs.Arg(0), *workers)
 			if err != nil {
 				return err
 			}
 			report.Intake(out, rep)
+			// The new originals make the batch; a labelled run takes every
+			// original it saw: the owner labelled the folder as a whole.
+			labelled := len(labels.persons) > 0 || len(attrs) > 0
+			originals := rep.New
+			if labelled {
+				originals = rep.Seen
+			}
+			if len(originals) == 0 {
+				return nil
+			}
+			if err := labels.createPerson(ctx, c, out); err != nil {
+				return err
+			}
+			b := catalog.Batch{Kind: "folder", Root: intake.URI(rep.Root), Label: *batchLabel, Persons: labels.persons, Attrs: attrs}
+			if b.ID, err = c.CreateBatch(ctx, b, originals, time.Now()); err != nil {
+				return err
+			}
+			b.Originals = len(originals)
+			report.BatchCreated(out, b)
+			if labelled {
+				return reindex(ctx, c, out)
+			}
 		case "dupes":
 			d, err := c.Duplicates(ctx)
 			if err != nil {
@@ -367,12 +408,91 @@ func serve(ctx context.Context, home, addr string, out io.Writer) error {
 }
 
 // stringList is a repeatable string flag.
+// reindex reruns index and reports it; batch changes reach documents this way.
+func reindex(ctx context.Context, c *catalog.Catalog, out io.Writer) error {
+	rep, err := index.Run(ctx, c, time.Now())
+	if err != nil {
+		return err
+	}
+	un, err := c.Unlinked(ctx)
+	if err != nil {
+		return err
+	}
+	report.IndexRun(out, rep, un)
+	return nil
+}
+
+// batchFlags are the owner's labels for a batch (ADR-0006): whose documents
+// these are, an existing person or a new one, and their characteristics.
+type batchFlags struct {
+	persons, aliases, attrs stringList
+	name, label, birth      string
+}
+
+func (f *batchFlags) register(fs *flag.FlagSet) {
+	fs.Var(&f.persons, "person", "person code (repeatable)")
+	fs.StringVar(&f.name, "name", "", "full name: creates the person given by --person/--code")
+	fs.StringVar(&f.label, "label", "", "what the assistant sees, e.g. Папа")
+	fs.StringVar(&f.birth, "birth", "", "birth date, YYYY-MM-DD")
+	fs.Var(&f.aliases, "alias", "a spelling found in documents (repeatable)")
+	fs.Var(&f.attrs, "attr", "characteristic KEY=VALUE (repeatable)")
+}
+
+// check validates the labels before anything is written: characteristics
+// parse, named persons exist, a new person's code is free.
+func (f *batchFlags) check(ctx context.Context, c *catalog.Catalog) ([]catalog.Attr, error) {
+	var attrs []catalog.Attr
+	for _, s := range f.attrs {
+		a, err := catalog.ParseAttr(s)
+		if err != nil {
+			return nil, usageError{err.Error()}
+		}
+		attrs = append(attrs, a)
+	}
+	ps, err := c.Persons(ctx)
+	if err != nil {
+		return nil, err
+	}
+	known := map[string]bool{}
+	for _, p := range ps {
+		known[p.Code] = true
+	}
+	if f.name != "" {
+		if len(f.persons) != 1 {
+			return nil, usageError{"--name creates one person: give exactly one --person CODE"}
+		}
+		if known[f.persons[0]] {
+			return nil, fmt.Errorf("код %s уже занят; чтобы выбрать этого человека, не указывай --name", f.persons[0])
+		}
+		return attrs, nil
+	}
+	for _, code := range f.persons {
+		if !known[code] {
+			return nil, fmt.Errorf("человека с кодом %s нет: выбери из person list или создай, добавив --name", code)
+		}
+	}
+	return attrs, nil
+}
+
+// createPerson adds the new person named by --name, if any.
+func (f *batchFlags) createPerson(ctx context.Context, c *catalog.Catalog, out io.Writer) error {
+	if f.name == "" {
+		return nil
+	}
+	p := catalog.Person{Code: f.persons[0], Label: f.label, FullName: f.name, Aliases: f.aliases, BirthDate: f.birth}
+	if err := c.AddPerson(ctx, p, time.Now()); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Добавлен %s (%s).\n", p.Code, p.FullName)
+	return nil
+}
+
 type stringList []string
 
 func (l *stringList) String() string     { return strings.Join(*l, ", ") }
 func (l *stringList) Set(v string) error { *l = append(*l, v); return nil }
 
-// accountAdmin handles token, person and index.
+// accountAdmin handles token, person, batch and index.
 func accountAdmin(ctx context.Context, home, cmd string, rest []string, out io.Writer) error {
 	sub := ""
 	if cmd != "index" {
@@ -385,17 +505,18 @@ func accountAdmin(ctx context.Context, home, cmd string, rest []string, out io.W
 	fs.SetOutput(io.Discard)
 	id := fs.String("account", "", "account id")
 	code := fs.String("code", "", "person code")
-	label := fs.String("label", "", "what the assistant sees, e.g. Папа")
-	name := fs.String("name", "", "full name")
-	birth := fs.String("birth", "", "birth date, YYYY-MM-DD")
-	var aliases stringList
-	fs.Var(&aliases, "alias", "a spelling found in documents (repeatable)")
+	var labels batchFlags
+	labels.register(fs)
+	noPerson := fs.Bool("no-person", false, "batch set: the batch names no person")
+	var unset stringList
+	fs.Var(&unset, "unset", "batch set: KEY or KEY=VALUE to remove (repeatable)")
 	if err := fs.Parse(rest); err != nil {
 		return usageError{err.Error()}
 	}
 	if *id == "" {
 		return usageError{"--account is required"}
 	}
+	name, label, birth, aliases := &labels.name, &labels.label, &labels.birth, labels.aliases
 	a, err := account.Open(home, *id)
 	if err != nil {
 		return err
@@ -430,15 +551,53 @@ func accountAdmin(ctx context.Context, home, cmd string, rest []string, out io.W
 		}
 		report.Persons(out, ps)
 	case cmd == "index":
-		rep, err := index.Run(ctx, c, time.Now())
+		return reindex(ctx, c, out)
+	case cmd == "batch" && sub == "list":
+		bs, err := c.Batches(ctx)
 		if err != nil {
 			return err
 		}
-		un, err := c.Unlinked(ctx)
+		report.Batches(out, bs)
+	case cmd == "batch" && sub == "set":
+		if fs.NArg() != 1 {
+			return usageError{"expected a batch id"}
+		}
+		bid, err := strconv.ParseInt(fs.Arg(0), 10, 64)
+		if err != nil {
+			return usageError{"batch id is a number: " + fs.Arg(0)}
+		}
+		if *noPerson && len(labels.persons) > 0 {
+			return usageError{"--no-person and --person exclude each other"}
+		}
+		attrs, err := labels.check(ctx, c)
 		if err != nil {
 			return err
 		}
-		report.IndexRun(out, rep, un)
+		ch := catalog.BatchChange{Add: attrs}
+		if len(labels.persons) > 0 || *noPerson {
+			ps := []string(labels.persons)
+			ch.Persons = &ps
+		}
+		for _, u := range unset {
+			k, v, _ := strings.Cut(u, "=")
+			ch.Remove = append(ch.Remove, catalog.Attr{Key: catalog.AttrKey(k), Value: strings.TrimSpace(v)})
+		}
+		if err := labels.createPerson(ctx, c, out); err != nil {
+			return err
+		}
+		if err := c.ChangeBatch(ctx, bid, ch); err != nil {
+			return err
+		}
+		bs, err := c.Batches(ctx)
+		if err != nil {
+			return err
+		}
+		for _, b := range bs {
+			if b.ID == bid {
+				report.Batches(out, []catalog.Batch{b})
+			}
+		}
+		return reindex(ctx, c, out)
 	default:
 		return usageError{fmt.Sprintf("unknown %s subcommand %q", cmd, sub)}
 	}

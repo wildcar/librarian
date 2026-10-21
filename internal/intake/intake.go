@@ -29,6 +29,9 @@ type Report struct {
 	Errors    []string
 	Missing   int64 // sources under Root that disappeared since the last run
 	Duration  time.Duration
+	RunID     int64
+	Seen      []string // originals (sha256) of every file read or found unchanged
+	New       []string // of them, the originals the account had never seen
 }
 
 // skipReason returns why a name is not a document, or "".
@@ -137,6 +140,7 @@ func Folder(ctx context.Context, cat *catalog.Catalog, root string, workers int)
 		files     int
 		skipped   map[string]int
 		unchanged []string
+		seen      []string // sha256 of the unchanged files
 		errors    []string
 	}
 	w := &walkState{skipped: map[string]int{}}
@@ -178,6 +182,7 @@ func Folder(ctx context.Context, cat *catalog.Catalog, root string, workers int)
 			}
 			if prev != nil && prev.Size == info.Size() && prev.MTime.Equal(info.ModTime().UTC()) {
 				w.unchanged = append(w.unchanged, uri)
+				w.seen = append(w.seen, prev.SHA256)
 				return nil
 			}
 			select {
@@ -207,8 +212,10 @@ func Folder(ctx context.Context, cat *catalog.Catalog, root string, workers int)
 		if err != nil {
 			return nil, err
 		}
+		rep.Seen = append(rep.Seen, r.sha)
 		if isNew {
 			rep.NewFiles++
+			rep.New = append(rep.New, r.sha)
 		}
 	}
 	if err := <-walkErr; err != nil {
@@ -222,6 +229,8 @@ func Folder(ctx context.Context, cat *catalog.Catalog, root string, workers int)
 		}
 	}
 	rep.Unchanged = len(w.unchanged)
+	rep.Seen = append(rep.Seen, w.seen...)
+	rep.RunID = runID
 	// Anything under this root that was not seen in this run has gone away.
 	rep.Missing, err = cat.MarkMissing(ctx, URI(abs)+"/", now)
 	if err != nil {

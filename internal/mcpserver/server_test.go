@@ -261,8 +261,12 @@ func TestSearchPagingMissingAndReview(t *testing.T) {
 			t.Errorf("%s: %v", name, out)
 		}
 	}
-	if _, isErr := call(t, s, "search_documents", map[string]any{"missing": []string{"colour"}}); !isErr {
-		t.Error("unknown characteristic accepted")
+	// Any other name is a characteristic key; no document has this one.
+	if out, isErr := call(t, s, "search_documents", map[string]any{"missing": []string{"цвет"}}); isErr || out["total"] != float64(3) {
+		t.Errorf("missing characteristic: %v", out)
+	}
+	if _, isErr := call(t, s, "search_documents", map[string]any{"attrs": []string{"цвет"}}); !isErr {
+		t.Error("characteristic without a value accepted")
 	}
 
 	// Review names the kind of problem and never the leaked word itself.

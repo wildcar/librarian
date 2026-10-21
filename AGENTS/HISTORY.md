@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-21 · Batches: a person and characteristics for everything that came in together
+- What: ADR-0006; catalog batches (migration turns intake runs into batches), `ingest --person/--name/--attr/--batch-label`, `batch list|set`; index inherits batch persons and characteristics (manual > batch > rule, conflict → review); MCP attrs, batches, `attrs`/`batch` filters, `missing` for any key.
+- Why: 8 of 68 sample documents could not be linked from their text; the owner wants to say whose a batch is and give it characteristics instead of smarter name rules.
+- Files: docs/adr/0006-batches-and-characteristics.md, internal/catalog/batches.go, internal/catalog/catalog.go, internal/catalog/persons.go, internal/index/*, internal/intake/intake.go, internal/mcpserver/*, internal/report/report.go, cmd/librarian/main.go
+- Next: manual per-document links and characteristics; `add_document` uploads as batches; one pipeline command.
+
 ## 2026-10-21 · Date next to a signature is the document's date
 - What: dating prompt rule (pipeline 3) and the year restored from the quote for a --MM-DD answer (pipeline 4); sample 64 of 68 dated by quote.
 - Why: owner looked at two consultation forms left undated: the handwritten date beside the signature is the conclusion date.

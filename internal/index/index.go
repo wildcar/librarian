@@ -21,6 +21,7 @@ type Report struct {
 	Partial   int // a date without a day or a year
 	Linked    int // documents with at least one person
 	Links     map[string]int
+	ByBatch   map[string]int // of the links, given by a batch
 }
 
 // Run reindexes every document with text layers.
@@ -33,7 +34,7 @@ func Run(ctx context.Context, c *catalog.Catalog, now time.Time) (*Report, error
 	if err != nil {
 		return nil, err
 	}
-	rep := &Report{Documents: len(entries), Links: map[string]int{}}
+	rep := &Report{Documents: len(entries), Links: map[string]int{}, ByBatch: map[string]int{}}
 	for _, e := range entries {
 		date, partial, source, err := docDate(ctx, c, e, now)
 		if err != nil {
@@ -54,20 +55,44 @@ func Run(ctx context.Context, c *catalog.Catalog, now time.Time) (*Report, error
 		if err != nil {
 			return nil, err
 		}
-		if err := c.ClearRuleLinks(ctx, e.DocID); err != nil {
+		if err := c.ClearDerived(ctx, e.DocID); err != nil {
 			return nil, err
 		}
-		linked := false
+		codes, fromBatch := map[string]bool{}, map[string]bool{}
 		for _, p := range persons {
 			if reason := Match(p, verbatim); reason != "" {
 				if err := c.LinkPerson(ctx, e.DocID, p.Code, "rule", reason); err != nil {
 					return nil, err
 				}
-				rep.Links[p.Code]++
-				linked = true
+				codes[p.Code] = true
 			}
 		}
-		if linked {
+		// What the owner said about the batch outranks the rules (ADR-0006):
+		// a batch link replaces a rule link to the same person.
+		batches, err := c.BatchesOf(ctx, e.SHA256)
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range batches {
+			for _, code := range b.Persons {
+				if err := c.LinkPerson(ctx, e.DocID, code, "batch", fmt.Sprintf("пачка %d", b.BatchID)); err != nil {
+					return nil, err
+				}
+				codes[code], fromBatch[code] = true, true
+			}
+			for _, a := range b.Attrs {
+				if err := c.SetDocAttr(ctx, e.DocID, a, fmt.Sprintf("batch:%d", b.BatchID)); err != nil {
+					return nil, err
+				}
+			}
+		}
+		for code := range codes {
+			rep.Links[code]++
+		}
+		for code := range fromBatch {
+			rep.ByBatch[code]++
+		}
+		if len(codes) > 0 {
 			rep.Linked++
 		}
 	}

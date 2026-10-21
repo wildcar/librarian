@@ -28,8 +28,12 @@ search_documents ищет по словам и фильтрует по чело�
 меньше известно. date — дата создания документа (когда его составили, выдали, подписали), а не
 дата события, на которое он ссылается; date_source в get_document говорит, откуда она. Если у даты
 нет дня или года, она в date_partial (ГГГГ-ММ, ГГГГ или --ММ-ДД), а date пусто: недостающее не
-угадано, фильтры по датам такой документ считают документом без даты. missing=["date"] без фильтра по дате находит документы без даты, а вместе с
-date_from/date_to — документы в периоде или без даты; так же missing=["person"] и person.
+угадано, фильтры по датам такой документ считают документом без даты.
+attrs — характеристики документа (ключ → значения), открытый набор: у разных документов он разный.
+Владелец задаёт их пачке документов, присланных вместе (batches — номера пачек). Фильтр
+attrs=["ключ=значение"] требует все пары, batch — документы одной пачки. missing=["date"] без фильтра по дате находит документы без даты, а вместе с
+date_from/date_to — документы в периоде или без даты; так же missing=["person"] и person, а любой
+другой ключ в missing — характеристика с этим ключом (вместе с attrs по нему — значение или её нет).
 Если в документе нет однозначного ответа, так и скажи, не додумывай.
 По умолчанию отдаются только резюме без персональных данных. Суть документа (layer=essential) и
 дословный текст (layer=verbatim) запрашивай, только если резюме не хватает для ответа: в них есть
@@ -153,19 +157,23 @@ type searchIn struct {
 	Person   string   `json:"person,omitempty" jsonschema:"код человека из list_persons"`
 	DateFrom string   `json:"date_from,omitempty" jsonschema:"не раньше этой даты документа, ГГГГ-ММ-ДД"`
 	DateTo   string   `json:"date_to,omitempty" jsonschema:"не позже этой даты документа, ГГГГ-ММ-ДД"`
-	Missing  []string `json:"missing,omitempty" jsonschema:"характеристики, которых может не быть: date, person. Без фильтра по ней — только документы без неё; с фильтром — подходящие по фильтру или без неё"`
+	Attrs    []string `json:"attrs,omitempty" jsonschema:"характеристики «ключ=значение»; должны выполняться все"`
+	Batch    int64    `json:"batch,omitempty" jsonschema:"номер пачки: только документы, пришедшие в ней"`
+	Missing  []string `json:"missing,omitempty" jsonschema:"характеристики, которых может не быть: date, person или ключ характеристики. Без фильтра по ней — только документы без неё; с фильтром — подходящие по фильтру или без неё"`
 	Offset   int      `json:"offset,omitempty" jsonschema:"сколько первых документов пропустить: next_offset из прошлого ответа"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"сколько документов вернуть, до 50 (по умолчанию 20)"`
 }
 
 type docOut struct {
-	ID          string   `json:"id"`
-	Date        string   `json:"date,omitempty"`
-	DatePartial string   `json:"date_partial,omitempty"`
-	Persons     []string `json:"persons"`
-	Pages       int      `json:"pages"`
-	Summary     string   `json:"summary"`
-	Review      []string `json:"review"`
+	ID          string              `json:"id"`
+	Date        string              `json:"date,omitempty"`
+	DatePartial string              `json:"date_partial,omitempty"`
+	Persons     []string            `json:"persons"`
+	Pages       int                 `json:"pages"`
+	Summary     string              `json:"summary"`
+	Attrs       map[string][]string `json:"attrs,omitempty"`
+	Batches     []int64             `json:"batches,omitempty"`
+	Review      []string            `json:"review"`
 }
 
 type searchOut struct {
@@ -182,17 +190,20 @@ func (t *tools) search(ctx context.Context, _ *mcp.CallToolRequest, in searchIn)
 			return nil, searchOut{}, fmt.Errorf("дата %q: нужен формат ГГГГ-ММ-ДД", d)
 		}
 	}
-	for _, m := range in.Missing {
-		if m != catalog.MissingDate && m != catalog.MissingPerson {
-			return nil, searchOut{}, fmt.Errorf("missing: %q — допустимы date и person", m)
+	var attrs []catalog.Attr
+	for _, s := range in.Attrs {
+		a, err := catalog.ParseAttr(s)
+		if err != nil {
+			return nil, searchOut{}, err
 		}
+		attrs = append(attrs, a)
 	}
 	if in.Offset < 0 {
 		return nil, searchOut{}, fmt.Errorf("offset не может быть отрицательным")
 	}
 	hits, total, err := t.cat.Search(ctx, catalog.SearchQuery{
 		Text: in.Query, Person: in.Person, DateFrom: in.DateFrom, DateTo: in.DateTo,
-		Missing: in.Missing, Offset: in.Offset, Limit: in.Limit,
+		Attrs: attrs, Batch: in.Batch, Missing: in.Missing, Offset: in.Offset, Limit: in.Limit,
 	})
 	if err != nil {
 		return nil, searchOut{}, err
@@ -200,7 +211,7 @@ func (t *tools) search(ctx context.Context, _ *mcp.CallToolRequest, in searchIn)
 	out := searchOut{Total: total, Documents: []docOut{}}
 	for _, h := range hits {
 		out.Documents = append(out.Documents, docOut{ID: h.DocID, Date: h.Date, DatePartial: h.Partial, Persons: nonNil(h.Persons),
-			Pages: h.Pages, Summary: h.Summary, Review: nonNil(h.Review)})
+			Pages: h.Pages, Summary: h.Summary, Attrs: h.Attrs, Batches: h.Batches, Review: nonNil(h.Review)})
 	}
 	if next := in.Offset + len(hits); len(hits) > 0 && next < total {
 		out.NextOffset = next
@@ -238,15 +249,17 @@ type getIn struct {
 }
 
 type getOut struct {
-	ID          string   `json:"id"`
-	Date        string   `json:"date,omitempty"`
-	DatePartial string   `json:"date_partial,omitempty"`
-	DateSource  string   `json:"date_source,omitempty"`
-	Persons     []string `json:"persons"`
-	Pages       int      `json:"pages"`
-	Layer       string   `json:"layer"`
-	Text        string   `json:"text"`
-	Review      []string `json:"review"`
+	ID          string              `json:"id"`
+	Date        string              `json:"date,omitempty"`
+	DatePartial string              `json:"date_partial,omitempty"`
+	DateSource  string              `json:"date_source,omitempty"`
+	Persons     []string            `json:"persons"`
+	Pages       int                 `json:"pages"`
+	Layer       string              `json:"layer"`
+	Text        string              `json:"text"`
+	Attrs       map[string][]string `json:"attrs,omitempty"`
+	Batches     []int64             `json:"batches,omitempty"`
+	Review      []string            `json:"review"`
 }
 
 func (t *tools) get(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, getOut, error) {
@@ -273,8 +286,16 @@ func (t *tools) get(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp
 	if err != nil {
 		return nil, getOut{}, err
 	}
+	attrs, err := t.cat.DocAttrs(ctx, d.ID)
+	if err != nil {
+		return nil, getOut{}, err
+	}
+	batches, err := t.cat.DocBatches(ctx, d.ID)
+	if err != nil {
+		return nil, getOut{}, err
+	}
 	out := getOut{ID: d.ID, Date: date, DatePartial: partial, DateSource: dateSource(source), Persons: nonNil(persons),
-		Pages: d.LastPage - d.FirstPage + 1, Layer: layer, Review: nonNil(review)}
+		Pages: d.LastPage - d.FirstPage + 1, Layer: layer, Attrs: attrs, Batches: batches, Review: nonNil(review)}
 	switch layer {
 	case "summary":
 		out.Text = tx.Summary

@@ -138,12 +138,51 @@ func DateRun(w io.Writer, r *dating.Report) {
 	}
 }
 
+// BatchCreated prints a new batch.
+func BatchCreated(w io.Writer, b catalog.Batch) {
+	fmt.Fprintf(w, "Пачка %d: оригиналов %d%s\n", b.ID, b.Originals, batchLabels(b))
+}
+
+// Batches prints batches with what they hold and pass on.
+func Batches(w io.Writer, bs []catalog.Batch) {
+	if len(bs) == 0 {
+		fmt.Fprintln(w, "Пачек пока нет: они появляются при ingest.")
+		return
+	}
+	for _, b := range bs {
+		name := b.Label
+		if name == "" {
+			name = b.Root
+		}
+		fmt.Fprintf(w, "Пачка %d (%s, %s): оригиналов %d, документов %d%s\n",
+			b.ID, b.Created.Local().Format("2006-01-02 15:04"), name, b.Originals, b.Documents, batchLabels(b))
+	}
+}
+
+func batchLabels(b catalog.Batch) string {
+	var parts []string
+	if len(b.Persons) > 0 {
+		parts = append(parts, "человек: "+strings.Join(b.Persons, ", "))
+	}
+	if len(b.Attrs) > 0 {
+		as := make([]string, len(b.Attrs))
+		for i, a := range b.Attrs {
+			as[i] = a.String()
+		}
+		parts = append(parts, "характеристики: "+strings.Join(as, "; "))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "; " + strings.Join(parts, "; ")
+}
+
 // IndexRun prints the result of reindexing.
 func IndexRun(w io.Writer, r *index.Report, unlinked int) {
 	fmt.Fprintf(w, "Документов: %d, с датой %d, с неполной датой %d, привязано к людям %d, без человека %d\n",
 		r.Documents, r.Dated, r.Partial, r.Linked, unlinked)
 	for _, k := range sortedKeys(r.Links) {
-		fmt.Fprintf(w, "  %s: %d\n", k, r.Links[k])
+		fmt.Fprintf(w, "  %s: %d (по пачке %d)\n", k, r.Links[k], r.ByBatch[k])
 	}
 }
 

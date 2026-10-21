@@ -145,6 +145,47 @@ var schema = []string{
 		updated  TEXT NOT NULL
 	);
 	ALTER TABLE texts ADD COLUMN doc_date_partial TEXT;  -- YYYY-MM, YYYY or --MM-DD when no full date`,
+	// 9: batches — what came in together, with the persons and characteristics
+	// the owner gave it — and document characteristics (ADR-0006). Intake runs
+	// that brought new originals become batches with the same id.
+	`CREATE TABLE batches (
+		id      INTEGER PRIMARY KEY,
+		kind    TEXT NOT NULL,               -- folder | upload | link
+		root    TEXT,                        -- the folder or link it came from
+		label   TEXT,
+		created TEXT NOT NULL
+	);
+	CREATE TABLE batch_originals (
+		batch_id INTEGER NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
+		sha256   TEXT NOT NULL REFERENCES originals(sha256),
+		PRIMARY KEY (batch_id, sha256)
+	);
+	CREATE INDEX batch_originals_sha256 ON batch_originals(sha256);
+	CREATE TABLE batch_persons (
+		batch_id INTEGER NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
+		code     TEXT NOT NULL REFERENCES persons(code) ON DELETE CASCADE,
+		PRIMARY KEY (batch_id, code)
+	);
+	CREATE TABLE batch_attrs (
+		batch_id INTEGER NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
+		key      TEXT NOT NULL,              -- lower-cased, trimmed
+		value    TEXT NOT NULL,
+		PRIMARY KEY (batch_id, key, value)
+	);
+	CREATE TABLE doc_attrs (
+		doc_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+		key    TEXT NOT NULL,
+		value  TEXT NOT NULL,
+		source TEXT NOT NULL,                -- batch:<id> | manual
+		PRIMARY KEY (doc_id, key, value)
+	);
+	CREATE INDEX doc_attrs_key ON doc_attrs(key, value);
+	INSERT INTO batches (id, kind, root, created)
+		SELECT id, 'folder', root, started FROM intake_runs WHERE new_files > 0;
+	INSERT INTO batch_originals (batch_id, sha256)
+		SELECT r.id, o.sha256 FROM intake_runs r JOIN originals o
+		ON o.first_seen >= r.started AND o.first_seen <= COALESCE(r.finished, r.started)
+		WHERE r.new_files > 0;`,
 }
 
 // Catalog is an open account catalog.
