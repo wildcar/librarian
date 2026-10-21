@@ -191,7 +191,7 @@ func TestManualRefinement(t *testing.T) {
 		Attrs: []catalog.Attr{{Key: "тема", Value: "почки"}},
 		Unset: []catalog.Attr{{Key: "тема", Value: "сердце"}, {Key: "тег"}},
 		Date:  &month,
-	}, now)
+	}, catalog.OriginOwner, "", now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestManualRefinement(t *testing.T) {
 	}
 
 	// Taking it back: ЕБВ linked again, the manual date forgotten, no date at all on request.
-	if err := c.ChangeDocument(ctx, id, catalog.DocChange{Link: []string{"ЕБВ"}, ClearDate: true}, now); err != nil {
+	if err := c.ChangeDocument(ctx, id, catalog.DocChange{Link: []string{"ЕБВ"}, ClearDate: true}, catalog.OriginOwner, "", now); err != nil {
 		t.Fatal(err)
 	}
 	reindex()
@@ -222,18 +222,18 @@ func TestManualRefinement(t *testing.T) {
 		t.Errorf("date after clear %q %q (the summary has none)", d, s)
 	}
 	none := ""
-	if err := c.ChangeDocument(ctx, id, catalog.DocChange{Date: &none}, now); err != nil {
+	if err := c.ChangeDocument(ctx, id, catalog.DocChange{Date: &none}, catalog.OriginOwner, "", now); err != nil {
 		t.Fatal(err)
 	}
 	for _, bad := range []string{"2026-13", "12.09.2026", "--02-30"} {
-		if err := c.ChangeDocument(ctx, id, catalog.DocChange{Date: &bad}, now); err == nil {
+		if err := c.ChangeDocument(ctx, id, catalog.DocChange{Date: &bad}, catalog.OriginOwner, "", now); err == nil {
 			t.Errorf("date %q accepted", bad)
 		}
 	}
-	if err := c.ChangeDocument(ctx, "nope-1", catalog.DocChange{}, now); err == nil {
+	if err := c.ChangeDocument(ctx, "nope-1", catalog.DocChange{}, catalog.OriginOwner, "", now); err == nil {
 		t.Error("unknown document changed")
 	}
-	if err := c.ChangeDocument(ctx, id, catalog.DocChange{Link: []string{"XXX"}}, now); err == nil {
+	if err := c.ChangeDocument(ctx, id, catalog.DocChange{Link: []string{"XXX"}}, catalog.OriginOwner, "", now); err == nil {
 		t.Error("unknown person linked")
 	}
 }

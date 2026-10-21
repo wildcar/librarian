@@ -36,88 +36,109 @@ func Run(ctx context.Context, c *catalog.Catalog, now time.Time) (*Report, error
 	}
 	rep := &Report{Documents: len(entries), Links: map[string]int{}, ByBatch: map[string]int{}}
 	for _, e := range entries {
-		date, partial, source, err := docDate(ctx, c, e, now)
-		if err != nil {
+		if err := one(ctx, c, persons, e, now, rep); err != nil {
 			return nil, err
-		}
-		if err := c.SetDocDate(ctx, e.DocID, date, partial, source); err != nil {
-			return nil, err
-		}
-		if date != "" {
-			rep.Dated++
-		} else if partial != "" {
-			rep.Partial++
-		}
-		if err := c.IndexText(ctx, e.DocID, e.Summary, e.Essential); err != nil {
-			return nil, fmt.Errorf("index %s: %w", e.DocID, err)
-		}
-		verbatim, err := text(ctx, c, e)
-		if err != nil {
-			return nil, err
-		}
-		if err := c.ClearDerived(ctx, e.DocID); err != nil {
-			return nil, err
-		}
-		// What the owner ruled out for this document is never derived again.
-		rejected, err := c.DocRejected(ctx, e.DocID)
-		if err != nil {
-			return nil, err
-		}
-		codes, fromBatch := map[string]bool{}, map[string]bool{}
-		for _, p := range persons {
-			if rejected.Persons[p.Code] {
-				continue
-			}
-			if reason := Match(p, verbatim); reason != "" {
-				if err := c.LinkPerson(ctx, e.DocID, p.Code, "rule", reason); err != nil {
-					return nil, err
-				}
-				codes[p.Code] = true
-			}
-		}
-		// What the owner said about the batch outranks the rules (ADR-0006):
-		// a batch link replaces a rule link to the same person.
-		batches, err := c.BatchesOf(ctx, e.SHA256)
-		if err != nil {
-			return nil, err
-		}
-		for _, b := range batches {
-			for _, code := range b.Persons {
-				if rejected.Persons[code] {
-					continue
-				}
-				if err := c.LinkPerson(ctx, e.DocID, code, "batch", fmt.Sprintf("пачка %d", b.BatchID)); err != nil {
-					return nil, err
-				}
-				codes[code], fromBatch[code] = true, true
-			}
-			for _, a := range b.Attrs {
-				if rejected.Rejects(a) {
-					continue
-				}
-				if err := c.SetDocAttr(ctx, e.DocID, a, fmt.Sprintf("batch:%d", b.BatchID)); err != nil {
-					return nil, err
-				}
-			}
-		}
-		links, err := c.DocLinks(ctx, e.DocID) // manual links count too
-		if err != nil {
-			return nil, err
-		}
-		for _, l := range links {
-			codes[l.Code] = true
-		}
-		for code := range codes {
-			rep.Links[code]++
-		}
-		for code := range fromBatch {
-			rep.ByBatch[code]++
-		}
-		if len(codes) > 0 {
-			rep.Linked++
 		}
 	}
 	return rep, nil
+}
+
+// Doc reindexes one document, e.g. after a refinement.
+func Doc(ctx context.Context, c *catalog.Catalog, docID string, now time.Time) error {
+	persons, err := c.Persons(ctx)
+	if err != nil {
+		return err
+	}
+	e, err := c.IndexEntryOf(ctx, docID)
+	if err != nil {
+		return err
+	}
+	return one(ctx, c, persons, e, now, &Report{Links: map[string]int{}, ByBatch: map[string]int{}})
+}
+
+// one derives a document's date, search text, persons and characteristics.
+func one(ctx context.Context, c *catalog.Catalog, persons []catalog.Person, e catalog.IndexEntry, now time.Time, rep *Report) error {
+	date, partial, source, err := docDate(ctx, c, e, now)
+	if err != nil {
+		return err
+	}
+	if err := c.SetDocDate(ctx, e.DocID, date, partial, source); err != nil {
+		return err
+	}
+	if date != "" {
+		rep.Dated++
+	} else if partial != "" {
+		rep.Partial++
+	}
+	if err := c.IndexText(ctx, e.DocID, e.Summary, e.Essential); err != nil {
+		return fmt.Errorf("index %s: %w", e.DocID, err)
+	}
+	verbatim, err := text(ctx, c, e)
+	if err != nil {
+		return err
+	}
+	if err := c.ClearDerived(ctx, e.DocID); err != nil {
+		return err
+	}
+	// What the owner ruled out for this document is never derived again.
+	rejected, err := c.DocRejected(ctx, e.DocID)
+	if err != nil {
+		return err
+	}
+	codes, fromBatch := map[string]bool{}, map[string]bool{}
+	for _, p := range persons {
+		if rejected.Persons[p.Code] {
+			continue
+		}
+		if reason := Match(p, verbatim); reason != "" {
+			if err := c.LinkPerson(ctx, e.DocID, p.Code, "rule", reason); err != nil {
+				return err
+			}
+			codes[p.Code] = true
+		}
+	}
+	// What the owner said about the batch outranks the rules (ADR-0006):
+	// a batch link replaces a rule link to the same person.
+	batches, err := c.BatchesOf(ctx, e.SHA256)
+	if err != nil {
+		return err
+	}
+	for _, b := range batches {
+		for _, code := range b.Persons {
+			if rejected.Persons[code] {
+				continue
+			}
+			if err := c.LinkPerson(ctx, e.DocID, code, "batch", fmt.Sprintf("пачка %d", b.BatchID)); err != nil {
+				return err
+			}
+			codes[code], fromBatch[code] = true, true
+		}
+		for _, a := range b.Attrs {
+			if rejected.Rejects(a) {
+				continue
+			}
+			if err := c.SetDocAttr(ctx, e.DocID, a, fmt.Sprintf("batch:%d", b.BatchID)); err != nil {
+				return err
+			}
+		}
+	}
+	links, err := c.DocLinks(ctx, e.DocID) // manual links count too
+	if err != nil {
+		return err
+	}
+	for _, l := range links {
+		codes[l.Code] = true
+	}
+	for code := range codes {
+		rep.Links[code]++
+	}
+	for code := range fromBatch {
+		rep.ByBatch[code]++
+	}
+	if len(codes) > 0 {
+		rep.Linked++
+	}
+	return nil
 }
 
 func text(ctx context.Context, c *catalog.Catalog, e catalog.IndexEntry) (string, error) {
@@ -135,20 +156,22 @@ func text(ctx context.Context, c *catalog.Catalog, e catalog.IndexEntry) (string
 	return b.String(), nil
 }
 
-// docDate picks the document date: the owner's date first; then the
+// docDate picks the document date: a refined date first (the owner's or an
+// assistant's); then the
 // creation date a model read and its
 // quote confirmed (internal/dating), with its basis as the source; when the
 // model found none, there is none. Until the date stage has run, or when its
 // answer was rejected or failed, the summary's first sentence stands in.
 func docDate(ctx context.Context, c *catalog.Catalog, e catalog.IndexEntry, now time.Time) (date, partial, source string, err error) {
-	if m, ok, err := c.ManualDate(ctx, e.DocID); err != nil || ok {
+	if m, origin, ok, err := c.ManualDate(ctx, e.DocID); err != nil || ok {
 		if err != nil || m == "" {
 			return "", "", "", err
 		}
+		src := map[string]string{catalog.OriginOwner: "manual", catalog.OriginAssistant: "assistant"}[origin]
 		if full, _ := catalog.CheckDate(m); full {
-			return m, "", "manual", nil
+			return m, "", src, nil
 		}
-		return "", m, "manual", nil
+		return "", m, src, nil
 	}
 	d, ok, err := c.GetDocDate(ctx, e.DocID)
 	if err != nil {

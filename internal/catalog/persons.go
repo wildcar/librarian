@@ -75,13 +75,13 @@ func (c *Catalog) Persons(ctx context.Context) ([]Person, error) {
 	return out, rows.Err()
 }
 
-// LinkPerson attaches a person to a document. A manual link is never
-// replaced.
+// LinkPerson attaches a derived link (rule, batch) to a document. A link
+// made by the owner or an assistant is never replaced.
 func (c *Catalog) LinkPerson(ctx context.Context, docID, code, method, reason string) error {
 	_, err := c.db.ExecContext(ctx, `
 		INSERT INTO doc_persons (doc_id, code, method, reason) VALUES (?, ?, ?, ?)
 		ON CONFLICT(doc_id, code) DO UPDATE SET method = excluded.method, reason = excluded.reason
-		WHERE doc_persons.method != 'manual'`, docID, code, method, reason)
+		WHERE doc_persons.method NOT IN ('manual', 'assistant')`, docID, code, method, reason)
 	if err != nil {
 		return fmt.Errorf("link %s to %s: %w", code, docID, err)
 	}
@@ -135,6 +135,19 @@ func (c *Catalog) IndexEntries(ctx context.Context) ([]IndexEntry, error) {
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// IndexEntryOf returns the index entry of one document with text layers.
+func (c *Catalog) IndexEntryOf(ctx context.Context, docID string) (IndexEntry, error) {
+	var e IndexEntry
+	err := c.db.QueryRowContext(ctx, `
+		SELECT d.id, d.sha256, d.first_page, d.last_page, COALESCE(t.summary, ''), COALESCE(t.essential, '')
+		FROM documents d JOIN texts t ON t.doc_id = d.id WHERE d.id = ? AND t.status IN ('done', 'flagged')`, docID).
+		Scan(&e.DocID, &e.SHA256, &e.FirstPage, &e.LastPage, &e.Summary, &e.Essential)
+	if errors.Is(err, sql.ErrNoRows) {
+		return e, fmt.Errorf("%w: %s", ErrNoDocument, docID)
+	}
+	return e, err
 }
 
 // SetDocDate stores the document date and where it came from. date is a full
@@ -339,8 +352,8 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 
 // DocReview says what the owner still has to check in a document: pages the
 // second reading doubted, a split the rules disputed, a person in the text
-// other than the batch's, a creation date the text did not confirm, failed
-// summary checks.
+// other than the batch's, an assistant's refinement not yet confirmed, a
+// creation date the text did not confirm, failed summary checks.
 // The reasons name the kind of problem only, never the text that caused it,
 // because a leak check's hit is the very personal data it caught.
 func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error) {
@@ -392,6 +405,13 @@ func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error)
 	}
 	if stray > 0 {
 		out = append(out, "человек: в тексте найден не тот человек, что указан у пачки")
+	}
+	assisted, err := c.HasAssistantChanges(ctx, docID)
+	if err != nil {
+		return nil, fmt.Errorf("review %s: %w", docID, err)
+	}
+	if assisted {
+		out = append(out, "правка ассистента: владелец ещё не подтвердил")
 	}
 	if dateStatus.String == DateRejected {
 		out = append(out, "дата: названная моделью дата не подтвердилась текстом")

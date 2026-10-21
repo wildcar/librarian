@@ -83,6 +83,14 @@ a characteristic value or a whole key), because `index` rebuilds derived rows on
 and would otherwise bring back what the owner removed. The owner's date lives in
 `doc_manual_dates` (full, partial, or «no date») and replaces the derived one.
 
+**Refinement by an assistant** (MCP `update_document`, added the same day) is kept apart
+from the owner's: links `method = assistant`, characteristics `source = assistant`,
+`origin = assistant` on rejections and dates. Precedence becomes owner > assistant >
+batch > rule/model; an assistant cannot change what the owner set or ruled out by hand.
+The document shows a `review` reason until the owner confirms (`doc confirm`) or drops
+(`doc revert`) the assistant's facts. Every refinement is logged in `doc_changes` with its
+origin and reason (for an assistant, the user's words).
+
 ## Consequences
 
 - Linking no longer depends on reading a name: everything that came in a labelled batch is

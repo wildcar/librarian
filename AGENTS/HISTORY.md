@@ -4,6 +4,13 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-21 · Refinement by an assistant over MCP
+- What: MCP `update_document` (persons, characteristics, date; reason required) marked `assistant`, below the owner and above batch/rule; review until `doc confirm` / `doc revert`; every refinement logged in `doc_changes`; `index.Doc` reindexes one document.
+- Why: owner wants corrections said to the assistant ("this is mother's") to reach the library, visibly marked.
+- Files: internal/catalog/manual.go, internal/catalog/catalog.go, internal/catalog/persons.go, internal/catalog/batches.go, internal/index/index.go, internal/mcpserver/*, internal/report/report.go, cmd/librarian/main.go, docs/adr/0006-batches-and-characteristics.md
+- Fixes-on-the-fly: a jsonschema description starting with «ключ=…» made AddTool panic for every account; reworded, the test caught it.
+- Next: characteristics read by a model; `add_document` uploads as batches.
+
 ## 2026-10-21 · Manual refinement of one document
 - What: `librarian doc set` (person link/unlink, characteristics add/rule out, date full/partial/none/clear) and `doc show` with provenance; index never re-derives what the owner ruled out; MCP date source «уточнена владельцем».
 - Why: owner: documents get refined later (date, person, outdated facts) and the refinement must hold.

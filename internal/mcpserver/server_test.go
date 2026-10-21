@@ -285,3 +285,77 @@ func TestSearchPagingMissingAndReview(t *testing.T) {
 		t.Errorf("clean document review: %v", clean["review"])
 	}
 }
+
+func TestUpdateDocumentByAssistant(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	tok, doc := seed(t, home, "delta", "Иванов Петр Сергеевич",
+		"Направление от 12.09.2026 на приём 08.10.2026.", "Направление. Иванов.")
+	srv := mcpserver.New(home)
+	defer srv.Close()
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+	s := connect(t, ts.URL+"/mcp", tok)
+
+	if _, isErr := call(t, s, "update_document", map[string]any{"id": doc, "date": "2026-09-12"}); !isErr {
+		t.Error("a change without the user's words accepted")
+	}
+	out, isErr := call(t, s, "update_document", map[string]any{"id": doc, "reason": "пользователь: это не папин, дата 12 сентября",
+		"remove_persons": []string{"Pd"}, "add_attrs": []string{"тема=МРТ"}, "date": "2026-09-12"})
+	if isErr {
+		t.Fatalf("update: %v", out)
+	}
+	ob, _ := json.Marshal(out)
+	if p, _ := out["persons"].([]any); len(p) != 0 || out["date"] != "2026-09-12" ||
+		!strings.Contains(string(ob), "МРТ") || !strings.Contains(string(ob), "правка ассистента") ||
+		!strings.Contains(out["date_source"].(string), "ассистентом") {
+		t.Errorf("after update: %s", ob)
+	}
+
+	// The owner's own date stands: the assistant may not change it.
+	a, err := account.Open(home, "delta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := catalog.Open(a.CatalogPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	owners := "2026-09-11"
+	if err := c.ChangeDocument(ctx, doc, catalog.DocChange{Date: &owners}, catalog.OriginOwner, "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, isErr := call(t, s, "update_document", map[string]any{"id": doc, "reason": "x", "date": "2026-09-12"}); !isErr {
+		t.Error("the assistant overwrote the owner's date")
+	}
+	log, _ := c.DocChanges(ctx, doc)
+	if len(log) != 2 || log[0].Origin != catalog.OriginAssistant || !strings.Contains(log[0].Reason, "не папин") {
+		t.Errorf("log: %+v", log)
+	}
+
+	// Revert: the person comes back from the name in the text; the characteristic goes.
+	if n, err := c.RevertAssistant(ctx, doc); err != nil || n != 2 { // the unlink and the characteristic
+		t.Errorf("revert: %d %v", n, err)
+	}
+	if err := index.Doc(ctx, c, doc, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := c.DocPersons(ctx, doc); strings.Join(p, ",") != "Pd" {
+		t.Errorf("after revert persons %v", p)
+	}
+	if r, _ := c.DocReview(ctx, doc); len(r) != 0 {
+		t.Errorf("after revert review %v", r)
+	}
+
+	// Confirm: an assistant's change becomes the owner's and leaves review.
+	if _, isErr := call(t, s, "update_document", map[string]any{"id": doc, "reason": "пользователь: тег поездка", "add_attrs": []string{"тег=поездка"}}); isErr {
+		t.Fatal("second update")
+	}
+	if n, err := c.ConfirmAssistant(ctx, doc); err != nil || n != 1 {
+		t.Errorf("confirm: %d %v", n, err)
+	}
+	if r, _ := c.DocReview(ctx, doc); len(r) != 0 {
+		t.Errorf("after confirm review %v", r)
+	}
+}

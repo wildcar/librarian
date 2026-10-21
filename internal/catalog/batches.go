@@ -251,13 +251,13 @@ func (c *Catalog) ClearDerived(ctx context.Context, docID string) error {
 	return err
 }
 
-// SetDocAttr gives a document a characteristic. A manual one is never
-// replaced.
+// SetDocAttr gives a document a derived characteristic. One given by the
+// owner or an assistant is never replaced.
 func (c *Catalog) SetDocAttr(ctx context.Context, docID string, a Attr, source string) error {
 	_, err := c.db.ExecContext(ctx, `
 		INSERT INTO doc_attrs (doc_id, key, value, source) VALUES (?, ?, ?, ?)
 		ON CONFLICT(doc_id, key, value) DO UPDATE SET source = excluded.source
-		WHERE doc_attrs.source != 'manual'`, docID, a.Key, a.Value, source)
+		WHERE doc_attrs.source NOT IN ('manual', 'assistant')`, docID, a.Key, a.Value, source)
 	if err != nil {
 		return fmt.Errorf("attr %s of %s: %w", a, docID, err)
 	}

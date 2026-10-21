@@ -6,7 +6,9 @@
 //	librarian [--home DIR] batch   set  --account <id> [batch labels] [--no-person] [--unset KEY[=VALUE]]... <batch id>
 //	librarian [--home DIR] doc     show --account <id> <document id>
 //	librarian [--home DIR] doc     set  --account <id> [--person CODE]... [--unlink CODE]... [--no-person]
-//	                                [--attr KEY=VALUE]... [--unset KEY[=VALUE]]... [--date D | --no-date | --clear-date] <document id>
+//	                                [--attr KEY=VALUE]... [--unset KEY[=VALUE]]... [--date D | --no-date | --clear-date]
+//	                                [--reason TEXT] <document id>
+//	librarian [--home DIR] doc     confirm|revert --account <id> <document id>
 //	librarian [--home DIR] dupes   --account <id>
 //	librarian [--home DIR] stats   --account <id>
 //	librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run] [--no-check]
@@ -70,7 +72,9 @@ const usage = `usage:
   librarian [--home DIR] batch set  --account <id> [labels] [--no-person] [--unset KEY[=VALUE]]... <batch id>
   librarian [--home DIR] doc show --account <id> <document id>
   librarian [--home DIR] doc set  --account <id> [--person CODE]... [--unlink CODE]... [--no-person]
-        [--attr KEY=VALUE]... [--unset KEY[=VALUE]]... [--date YYYY-MM-DD|YYYY-MM|YYYY|--MM-DD | --no-date | --clear-date] <document id>
+        [--attr KEY=VALUE]... [--unset KEY[=VALUE]]... [--date YYYY-MM-DD|YYYY-MM|YYYY|--MM-DD | --no-date | --clear-date]
+        [--reason TEXT] <document id>
+  librarian [--home DIR] doc confirm|revert --account <id> <document id>
   librarian [--home DIR] dupes  --account <id>
   librarian [--home DIR] stats  --account <id>
   librarian [--home DIR] extract --account <id> [--limit N] [--workers N] [--model ID] [--dry-run] [--no-check]
@@ -90,6 +94,7 @@ const usage = `usage:
 
 doc set refines one document; it outranks batches, rules and models and index keeps it:
         --unlink and --unset also stop a batch or rule from bringing the person or value back.
+doc confirm makes an assistant's refinements (MCP update_document) the owner's; doc revert drops them.
 
 labels: --person CODE (repeatable) — whose documents these are; with --name "..." [--label L]
         [--birth YYYY-MM-DD] [--alias A]... a new person is created under CODE;
@@ -444,6 +449,9 @@ func showDoc(ctx context.Context, c *catalog.Catalog, id string, out io.Writer) 
 	if st.Review, err = c.DocReview(ctx, id); err != nil {
 		return err
 	}
+	if st.Changes, err = c.DocChanges(ctx, id); err != nil {
+		return err
+	}
 	report.Doc(out, st)
 	return nil
 }
@@ -554,6 +562,7 @@ func accountAdmin(ctx context.Context, home, cmd string, rest []string, out io.W
 	date := fs.String("date", "", "doc set: YYYY-MM-DD, YYYY-MM, YYYY or --MM-DD")
 	noDate := fs.Bool("no-date", false, "doc set: the document has no date")
 	clearDate := fs.Bool("clear-date", false, "doc set: forget the manual date")
+	why := fs.String("reason", "", "doc set: why, kept in the document's change log")
 	if err := fs.Parse(rest); err != nil {
 		return usageError{err.Error()}
 	}
@@ -649,12 +658,30 @@ func accountAdmin(ctx context.Context, home, cmd string, rest []string, out io.W
 		if err := labels.createPerson(ctx, c, out); err != nil {
 			return err
 		}
-		if err := c.ChangeDocument(ctx, doc, ch, time.Now()); err != nil {
+		if err := c.ChangeDocument(ctx, doc, ch, catalog.OriginOwner, *why, time.Now()); err != nil {
 			return err
 		}
-		if _, err := index.Run(ctx, c, time.Now()); err != nil {
+		if err := index.Doc(ctx, c, doc, time.Now()); err != nil {
 			return err
 		}
+		return showDoc(ctx, c, doc, out)
+	case cmd == "doc" && (sub == "confirm" || sub == "revert"):
+		if fs.NArg() != 1 {
+			return usageError{"expected a document id"}
+		}
+		doc := fs.Arg(0)
+		apply, verb := c.ConfirmAssistant, "подтверждено"
+		if sub == "revert" {
+			apply, verb = c.RevertAssistant, "откачено"
+		}
+		n, err := apply(ctx, doc)
+		if err != nil {
+			return err
+		}
+		if err := index.Doc(ctx, c, doc, time.Now()); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Правок ассистента %s: %d\n", verb, n)
 		return showDoc(ctx, c, doc, out)
 	case cmd == "batch" && sub == "set":
 		if fs.NArg() != 1 {

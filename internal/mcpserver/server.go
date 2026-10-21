@@ -12,11 +12,13 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/wildcar/librarian/internal/account"
 	"github.com/wildcar/librarian/internal/catalog"
+	"github.com/wildcar/librarian/internal/index"
 )
 
 // Instructions tell the assistant how to use the archive.
@@ -38,7 +40,11 @@ date_from/date_to — документы в периоде или без дат�
 По умолчанию отдаются только резюме без персональных данных. Суть документа (layer=essential) и
 дословный текст (layer=verbatim) запрашивай, только если резюме не хватает для ответа: в них есть
 имена, номера и названия организаций. review перечисляет, что владелец ещё не проверил
-(распознавание страницы, границы документа, резюме); пустой список — замечаний нет.`
+(распознавание страницы, границы документа, резюме); пустой список — замечаний нет.
+update_document меняет документ: вызывай его, только когда пользователь сам сказал, что исправить
+(«это мамин документ», «дата — 12 сентября»), а не по своей догадке, и передай в reason его слова.
+Правка видна как правка ассистента, пока владелец её не подтвердит; то, что владелец задал вручную,
+ассистент изменить не может.`
 
 // Server serves the MCP endpoint for every account under one data root.
 type Server struct {
@@ -116,6 +122,8 @@ func (s *Server) forAccount(a *account.Account) (*mcp.Server, error) {
 		Description: "Люди, чьи документы хранит аккаунт: код, метка и число документов. Полных имён нет."}, t.listPersons)
 	mcp.AddTool(srv, &mcp.Tool{Name: "search_documents",
 		Description: "Поиск и перечисление документов по словам, человеку и датам, с отсутствующими характеристиками и постранично. Возвращает резюме без персональных данных."}, t.search)
+	mcp.AddTool(srv, &mcp.Tool{Name: "update_document",
+		Description: "Уточнить документ со слов пользователя: человек, характеристики, дата. Правка помечается как правка ассистента до подтверждения владельцем."}, t.update)
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_document",
 		Description: "Документ по id: резюме (по умолчанию), суть (essential) или дословный текст (verbatim)."}, t.get)
 	s.catalogs[a.ID], s.servers[a.ID] = c, srv
@@ -232,8 +240,98 @@ func dateSource(s string) string {
 		return "из первой фразы резюме"
 	case "manual":
 		return "уточнена владельцем"
+	case "assistant":
+		return "уточнена ассистентом, владелец не подтвердил"
 	}
 	return s
+}
+
+// --- update_document ---------------------------------------------------------
+
+type updateIn struct {
+	ID          string   `json:"id" jsonschema:"id документа"`
+	Reason      string   `json:"reason" jsonschema:"почему: что сказал пользователь, его словами"`
+	AddPersons  []string `json:"add_persons,omitempty" jsonschema:"коды людей из list_persons, к которым относится документ"`
+	DropPersons []string `json:"remove_persons,omitempty" jsonschema:"коды людей, к которым документ не относится"`
+	AddAttrs    []string `json:"add_attrs,omitempty" jsonschema:"характеристики «ключ=значение»"`
+	DropAttrs   []string `json:"remove_attrs,omitempty" jsonschema:"что убрать: «ключ=значение» — одно значение, «ключ» — все значения ключа"`
+	Date        string   `json:"date,omitempty" jsonschema:"дата создания: ГГГГ-ММ-ДД, ГГГГ-ММ, ГГГГ или --ММ-ДД; none — даты у документа нет"`
+	ClearDate   bool     `json:"clear_date,omitempty" jsonschema:"убрать уточнённую дату: вернётся найденная автоматически"`
+}
+
+type updateOut struct {
+	ID          string              `json:"id"`
+	Date        string              `json:"date,omitempty"`
+	DatePartial string              `json:"date_partial,omitempty"`
+	DateSource  string              `json:"date_source,omitempty"`
+	Persons     []string            `json:"persons"`
+	Attrs       map[string][]string `json:"attrs,omitempty"`
+	Review      []string            `json:"review"`
+}
+
+func (t *tools) update(ctx context.Context, _ *mcp.CallToolRequest, in updateIn) (*mcp.CallToolResult, updateOut, error) {
+	if strings.TrimSpace(in.Reason) == "" {
+		return nil, updateOut{}, fmt.Errorf("reason обязателен: что сказал пользователь")
+	}
+	if in.Date != "" && in.ClearDate {
+		return nil, updateOut{}, fmt.Errorf("date и clear_date вместе не задаются")
+	}
+	ch := catalog.DocChange{Link: in.AddPersons, Unlink: in.DropPersons, ClearDate: in.ClearDate}
+	for _, s := range in.AddAttrs {
+		a, err := catalog.ParseAttr(s)
+		if err != nil {
+			return nil, updateOut{}, err
+		}
+		ch.Attrs = append(ch.Attrs, a)
+	}
+	for _, s := range in.DropAttrs {
+		k, v, _ := strings.Cut(s, "=")
+		a := catalog.Attr{Key: catalog.AttrKey(k), Value: strings.TrimSpace(v)}
+		if a.Key == "" {
+			return nil, updateOut{}, fmt.Errorf("remove_attrs: пустой ключ в %q", s)
+		}
+		ch.Unset = append(ch.Unset, a)
+	}
+	switch in.Date {
+	case "":
+	case "none":
+		none := ""
+		ch.Date = &none
+	default:
+		d := in.Date
+		ch.Date = &d
+	}
+	now := time.Now()
+	if err := t.cat.ChangeDocument(ctx, in.ID, ch, catalog.OriginAssistant, strings.TrimSpace(in.Reason), now); err != nil {
+		if errors.Is(err, catalog.ErrNoDocument) {
+			return nil, updateOut{}, fmt.Errorf("документ %q не найден", in.ID)
+		}
+		return nil, updateOut{}, err
+	}
+	if err := index.Doc(ctx, t.cat, in.ID, now); err != nil {
+		return nil, updateOut{}, err
+	}
+	out := updateOut{ID: in.ID}
+	var err error
+	var source string
+	if out.Date, out.DatePartial, source, err = t.cat.DocDateOf(ctx, in.ID); err != nil {
+		return nil, updateOut{}, err
+	}
+	out.DateSource = dateSource(source)
+	persons, err := t.cat.DocPersons(ctx, in.ID)
+	if err != nil {
+		return nil, updateOut{}, err
+	}
+	out.Persons = nonNil(persons)
+	if out.Attrs, err = t.cat.DocAttrs(ctx, in.ID); err != nil {
+		return nil, updateOut{}, err
+	}
+	review, err := t.cat.DocReview(ctx, in.ID)
+	if err != nil {
+		return nil, updateOut{}, err
+	}
+	out.Review = nonNil(review)
+	return nil, out, nil
 }
 
 func nonNil(s []string) []string {

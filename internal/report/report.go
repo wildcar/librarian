@@ -148,6 +148,7 @@ type DocState struct {
 	Batches                   []int64
 	Rejected                  catalog.Rejected
 	Review                    []string
+	Changes                   []catalog.DocChangeEntry
 	Summary                   string
 }
 
@@ -199,6 +200,17 @@ func Doc(w io.Writer, d DocState) {
 	for _, r := range d.Review {
 		fmt.Fprintf(w, "На проверку: %s\n", r)
 	}
+	for _, ch := range d.Changes {
+		who := "владелец"
+		if ch.Origin == catalog.OriginAssistant {
+			who = "ассистент"
+		}
+		line := fmt.Sprintf("Правка %s, %s: %s", ch.At.Local().Format("2006-01-02 15:04"), who, ch.Change)
+		if ch.Reason != "" {
+			line += " — " + ch.Reason
+		}
+		fmt.Fprintln(w, line)
+	}
 	fmt.Fprintf(w, "Резюме: %s\n", d.Summary)
 }
 
@@ -206,6 +218,8 @@ func linkLabel(l catalog.PersonLink) string {
 	switch l.Method {
 	case "manual":
 		return "вручную"
+	case "assistant":
+		return "ассистент, не подтверждено: " + l.Reason
 	case "batch":
 		return l.Reason
 	}
@@ -216,6 +230,8 @@ func sourceLabel(s string) string {
 	switch {
 	case s == "manual":
 		return "вручную"
+	case s == "assistant":
+		return "ассистент, не подтверждено"
 	case strings.HasPrefix(s, "batch:"):
 		return "пачка " + strings.TrimPrefix(s, "batch:")
 	case s == "model:stated":

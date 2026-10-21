@@ -202,6 +202,19 @@ var schema = []string{
 		date    TEXT NOT NULL,               -- YYYY-MM-DD, YYYY-MM, YYYY, --MM-DD; '' = the document has no date
 		created TEXT NOT NULL
 	);`,
+	// 11: refinements made by an assistant over MCP are kept apart from the
+	// owner's (method/source "assistant", origin), and every refinement is logged.
+	`ALTER TABLE doc_rejected ADD COLUMN origin TEXT NOT NULL DEFAULT 'owner';      -- owner | assistant
+	ALTER TABLE doc_manual_dates ADD COLUMN origin TEXT NOT NULL DEFAULT 'owner';
+	CREATE TABLE doc_changes (
+		id     INTEGER PRIMARY KEY,
+		doc_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+		origin TEXT NOT NULL,                -- owner | assistant
+		change TEXT NOT NULL,                -- JSON of the DocChange
+		reason TEXT NOT NULL DEFAULT '',     -- why, in the words of whoever made it
+		at     TEXT NOT NULL
+	);
+	CREATE INDEX doc_changes_doc ON doc_changes(doc_id);`,
 }
 
 // Catalog is an open account catalog.

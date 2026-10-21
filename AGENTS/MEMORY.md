@@ -24,6 +24,7 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - A document with missing facts stays in circulation with less information; later work only refines (date, person link, outdated facts). Answers state that a document is ambiguous instead of guessing (user, 2026-10-21).
 - Characteristics are open, not a fixed column set: tags and per-document characteristics that differ by kind (a photo has a different set from a referral); search must be able to ask for an absent characteristic or treat a filter as optional, rather than special-purpose filters (user, 2026-10-21; tags still an idea).
 - The document date is its creation date (a referral written on 12 Sept for 8 Oct is dated 12 Sept) and is the most important date; every dated document must get it. Upload date is secondary, for recalling batches (user, 2026-10-21).
+- An assistant may refine documents over MCP, but its changes stay marked as the assistant's until the owner confirms them, and it cannot override the owner's manual facts (user, 2026-10-21).
 - A doctor's specialty belongs in the summary: it is not personal data (user, 2026-10-21).
 
 ## Project facts
