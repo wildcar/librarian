@@ -1,0 +1,21 @@
+{{template "head" "Документы"}}{{template "bar" .V}}
+<main>
+<h1>Документы <span class="count">{{.Root.Count}}</span></h1>
+<form class="levels" method="get" action="/">
+<span class="muted">Группировать:</span>
+{{range $i, $c := .Chosen}}{{if $i}}<span class="muted">›</span>{{end}}<select name="by" aria-label="уровень {{$i}}">
+<option value="">—</option>
+{{range $.Options}}<option value="{{.Value}}"{{if eq .Value $c}} selected{{end}}>{{.Label}}</option>{{end}}
+</select>{{end}}
+<button>Показать</button>
+</form>
+{{template "node" .Root}}
+</main>
+{{template "foot"}}
+
+{{define "node"}}{{range .Nodes}}<details{{if .None}} class="none"{{end}}><summary>{{.Label}} <span class="count">{{.Count}}</span></summary>
+{{template "node" .}}</details>
+{{end}}{{if .Docs}}<ul class="docs">
+{{range .Docs}}<li><span class="d">{{date .Date .Partial}}</span><span><a href="/doc/{{.ID}}">{{title .Summary}}</a>
+{{range $k, $vs := .Attrs}}{{range $vs}}<span class="chip">{{$k}}: {{.}}</span>{{end}}{{end}}</span></li>
+{{end}}</ul>{{end}}{{end}}

@@ -1,0 +1,15 @@
+{{template "head" "Подтверждение входа"}}{{template "bar"}}
+<main><div class="narrow card">
+<h1>Войти в библиотеку?</h1>
+<dl class="facts">
+<dt>Почта</dt><dd>{{.P.Email}}</dd>
+<dt>Когда</dt><dd>{{.When}}</dd>
+<dt>Откуда</dt><dd>IP {{.P.IP}}, {{.P.Agent}}</dd>
+</dl>
+<p class="muted">Нажимайте, только если вход запросили вы сами.</p>
+<form method="post" action="/login/confirm">
+<input type="hidden" name="t" value="{{.Link}}">
+<button>Войти</button>
+</form>
+</div></main>
+{{template "foot"}}

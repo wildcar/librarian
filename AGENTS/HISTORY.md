@@ -4,6 +4,13 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-21 · Web interface: login by letter and the document tree
+- What: ADR-0007 (web + e-mail login for people and assistants, OAuth for MCP next); `service.sqlite` registry (e-mails, one-time links, sessions); letters over SMTP to the local Postfix; web login (button on the link page, the asking browser polls); tree with chosen levels and the document page; `/mcp` routed explicitly; `account email|unbind|list`, `login-link`.
+- Why: owner wants uploads and an overview in a browser and one e-mail login for the web and assistants.
+- Files: docs/adr/0007-web-interface-and-email-login.md, internal/users/*, internal/mail/mail.go, internal/web/*, internal/catalog/shelf.go, internal/catalog/dates.go, internal/mcpserver/server.go, cmd/librarian/main.go, deploy/librarian.service
+- Fixes-on-the-fly: the registry was created 0644 (chmod 0600, unit `UMask=0077`); a link outlived its e-mail's unbinding.
+- Next: SPF/DKIM/DMARC and PTR for wildcar.ru; OAuth for MCP; background pipeline and uploads.
+
 ## 2026-10-21 · Refinement by an assistant over MCP
 - What: MCP `update_document` (persons, characteristics, date; reason required) marked `assistant`, below the owner and above batch/rule; review until `doc confirm` / `doc revert`; every refinement logged in `doc_changes`; `index.Doc` reindexes one document.
 - Why: owner wants corrections said to the assistant ("this is mother's") to reach the library, visibly marked.

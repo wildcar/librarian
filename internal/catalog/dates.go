@@ -94,3 +94,22 @@ func (c *Catalog) GetDocDate(ctx context.Context, docID string) (DocDate, bool, 
 	d.Date, d.Basis, d.Quote, d.Reason = date.String, basis.String, quote.String, reason.String
 	return d, true, nil
 }
+
+// DateSourceLabel says in words where a document date came from (DocDateOf's source).
+func DateSourceLabel(s string) string {
+	switch s {
+	case "model:stated":
+		return "указана в документе как его дата"
+	case "model:event":
+		return "дата события, которое документ фиксирует"
+	case "model:":
+		return "прочитана из текста документа"
+	case "summary":
+		return "из первой фразы резюме"
+	case "manual":
+		return "уточнена владельцем"
+	case "assistant":
+		return "уточнена ассистентом, владелец не подтвердил"
+	}
+	return s
+}

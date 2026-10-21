@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- Web interface live at `https://lib.wildcar.ru` (ADR-0007): login by a letter (no e-mail bound yet: `librarian account email sergey <e-mail>`), the tree with chosen levels, the document page. Letters leave the local Postfix; without SPF/DKIM and PTR Gmail will refuse them, mail.ru took them before.
 - MCP `update_document`: an assistant refines persons, characteristics and date with the user's words as reason; marked until `librarian doc confirm | revert`.
 - Manual refinement per document: `librarian doc set | show` (person, characteristics, date), kept by index over batches, rules and models.
 - Batches (ADR-0006): the sample folder is batch 1, labelled ЕБВ — all 68 documents linked (60 by name before); characteristics per batch, searchable through MCP.
@@ -36,9 +37,12 @@ an MCP server from any AI assistant.
 
 ## Next
 
+- Mail: SPF, DKIM (OpenDKIM in Postfix), DMARC, MX for wildcar.ru (owner's DNS) and PTR 95.165.109.250 → mail.wildcar.ru (the provider).
+- OAuth 2.1 for MCP with the same letter, the assistant named in it; «Ассистенты» page; the assistant's name in the refinement log.
+- Background pipeline in `serve` and `librarian run`; uploads: files, a server folder within allowed roots, cloud links (ADR-0007).
 - Characteristics read from documents by a model (kind of document, specialty, organisation kind), `source = model`, same table as batch characteristics.
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
-- One command that runs the whole pipeline for new files (ingest → extract → split → digest → date → index), and `add_document` over MCP.
+- `add_document` over MCP.
 - Inbox for the owner: unlinked documents, flagged summaries, split reviews.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.

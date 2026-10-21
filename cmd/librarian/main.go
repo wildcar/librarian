@@ -1,6 +1,8 @@
 // Command librarian catalogues documents for isolated accounts (ADR-0004).
 //
-//	librarian [--home DIR] account create <id>
+//	librarian [--home DIR] account create [--email E] <id>
+//	librarian [--home DIR] account email <id> <e-mail> | unbind <e-mail> | list
+//	librarian [--home DIR] login-link <e-mail>
 //	librarian [--home DIR] ingest  --account <id> [--workers N] [batch labels] [--batch-label L] <folder>
 //	librarian [--home DIR] batch   list --account <id>
 //	librarian [--home DIR] batch   set  --account <id> [batch labels] [--no-person] [--unset KEY[=VALUE]]... <batch id>
@@ -55,18 +57,23 @@ import (
 	"github.com/wildcar/librarian/internal/index"
 	"github.com/wildcar/librarian/internal/intake"
 	"github.com/wildcar/librarian/internal/layers"
+	"github.com/wildcar/librarian/internal/mail"
 	"github.com/wildcar/librarian/internal/mcpserver"
 	"github.com/wildcar/librarian/internal/pages"
 	"github.com/wildcar/librarian/internal/report"
 	"github.com/wildcar/librarian/internal/router"
 	"github.com/wildcar/librarian/internal/split"
+	"github.com/wildcar/librarian/internal/users"
+	"github.com/wildcar/librarian/internal/web"
 )
 
 // version is overridden at build time: -ldflags "-X main.version=..."
 var version = "dev"
 
 const usage = `usage:
-  librarian [--home DIR] account create <id>
+  librarian [--home DIR] account create [--email E] <id>
+  librarian [--home DIR] account email <id> <e-mail> | unbind <e-mail> | list
+  librarian [--home DIR] login-link <e-mail>
   librarian [--home DIR] ingest --account <id> [--workers N] [labels] [--batch-label L] <folder>
   librarian [--home DIR] batch list --account <id>
   librarian [--home DIR] batch set  --account <id> [labels] [--no-person] [--unset KEY[=VALUE]]... <batch id>
@@ -141,20 +148,12 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	}
 	switch cmd {
 	case "account":
-		if len(rest) != 2 || rest[0] != "create" {
-			return usageError{"expected: account create <id>"}
+		return accountCmd(ctx, *home, rest, out)
+	case "login-link":
+		if len(rest) != 1 {
+			return usageError{"expected: login-link <e-mail>"}
 		}
-		a, err := account.Create(*home, rest[1])
-		if err != nil {
-			return err
-		}
-		c, err := catalog.Open(a.CatalogPath())
-		if err != nil {
-			return err
-		}
-		defer c.Close()
-		fmt.Fprintf(out, "Аккаунт %s создан: %s\n", a.ID, a.Root())
-		return nil
+		return loginLink(ctx, *home, rest[0], out)
 	case "serve":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
@@ -403,10 +402,38 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	return usageError{fmt.Sprintf("unknown command %q", cmd)}
 }
 
-// serve runs the MCP endpoint until the context ends.
+// serve runs the MCP endpoint and the web interface until the context ends.
+// The web needs LIBRARIAN_PUBLIC_URL (the address people open) and mail
+// settings: SMTP_ADDR (host:port), MAIL_FROM, and SMTP_USER / SMTP_PASSWORD
+// for a relay that wants a login. Without SMTP_ADDR letters go to the log:
+// for development only, they carry login links.
 func serve(ctx context.Context, home, addr string, out io.Writer) error {
 	s := mcpserver.New(home)
 	defer s.Close()
+	reg, err := users.Open(home)
+	if err != nil {
+		return err
+	}
+	defer reg.Close()
+	public := os.Getenv("LIBRARIAN_PUBLIC_URL")
+	if public == "" {
+		public = "http://" + addr
+	}
+	var sender mail.Sender = mail.Log{W: out}
+	if a := os.Getenv("SMTP_ADDR"); a != "" {
+		from := os.Getenv("MAIL_FROM")
+		if from == "" {
+			return fmt.Errorf("SMTP_ADDR is set but MAIL_FROM is not")
+		}
+		sender = mail.SMTP{Addr: a, User: os.Getenv("SMTP_USER"), Password: os.Getenv("SMTP_PASSWORD"), From: from}
+	} else {
+		fmt.Fprintln(out, "SMTP_ADDR не задан: письма для входа пишутся в журнал (только для разработки)")
+	}
+	w, err := web.New(web.Config{Registry: reg, Mail: sender, Public: public, Catalog: s.Catalog, Log: out})
+	if err != nil {
+		return err
+	}
+	s.SetWeb(w.Handler())
 	srv := &http.Server{Addr: addr, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
@@ -414,10 +441,114 @@ func serve(ctx context.Context, home, addr string, out io.Writer) error {
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
-	fmt.Fprintf(out, "MCP: http://%s/mcp (Authorization: Bearer <токен аккаунта>)\n", addr)
+	fmt.Fprintf(out, "MCP: http://%s/mcp (Authorization: Bearer <токен аккаунта>)\nВеб: %s\n", addr, public)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	return nil
+}
+
+// accountCmd creates accounts and binds the e-mails that log into them.
+func accountCmd(ctx context.Context, home string, rest []string, out io.Writer) error {
+	if len(rest) == 0 {
+		return usageError{"expected: account create | email | unbind | list"}
+	}
+	fs := flag.NewFlagSet("account", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	email := fs.String("email", "", "create: the e-mail that logs into the account")
+	if err := fs.Parse(rest[1:]); err != nil {
+		return usageError{err.Error()}
+	}
+	now := time.Now()
+	switch rest[0] {
+	case "create":
+		if fs.NArg() != 1 {
+			return usageError{"expected: account create [--email E] <id>"}
+		}
+		a, err := account.Create(home, fs.Arg(0))
+		if err != nil {
+			return err
+		}
+		c, err := catalog.Open(a.CatalogPath())
+		if err != nil {
+			return err
+		}
+		defer c.Close()
+		fmt.Fprintf(out, "Аккаунт %s создан: %s\n", a.ID, a.Root())
+		if *email == "" {
+			return nil
+		}
+		return bindEmail(ctx, home, a.ID, *email, now, out)
+	case "email":
+		if fs.NArg() != 2 {
+			return usageError{"expected: account email <id> <e-mail>"}
+		}
+		return bindEmail(ctx, home, fs.Arg(0), fs.Arg(1), now, out)
+	case "unbind":
+		if fs.NArg() != 1 {
+			return usageError{"expected: account unbind <e-mail>"}
+		}
+		reg, err := users.Open(home)
+		if err != nil {
+			return err
+		}
+		defer reg.Close()
+		if err := reg.RemoveEmail(ctx, fs.Arg(0)); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Почта %s больше не входит ни в какой аккаунт, её сессии закрыты\n", fs.Arg(0))
+		return nil
+	case "list":
+		reg, err := users.Open(home)
+		if err != nil {
+			return err
+		}
+		defer reg.Close()
+		us, err := reg.Users(ctx)
+		if err != nil {
+			return err
+		}
+		if len(us) == 0 {
+			fmt.Fprintln(out, "Ни одна почта не привязана: account email <id> <e-mail>")
+		}
+		for _, u := range us {
+			fmt.Fprintf(out, "%-20s %s\n", u.Account, u.Email)
+		}
+		return nil
+	}
+	return usageError{fmt.Sprintf("unknown account command %q", rest[0])}
+}
+
+func bindEmail(ctx context.Context, home, id, email string, now time.Time, out io.Writer) error {
+	reg, err := users.Open(home)
+	if err != nil {
+		return err
+	}
+	defer reg.Close()
+	if err := reg.SetEmail(ctx, email, id, now); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Почта %s входит в аккаунт %s\n", email, id)
+	return nil
+}
+
+// loginLink prints a one-time login link for the administrator, for when a
+// letter does not arrive: whoever opens it and presses the button is logged in.
+func loginLink(ctx context.Context, home, email string, out io.Writer) error {
+	reg, err := users.Open(home)
+	if err != nil {
+		return err
+	}
+	defer reg.Close()
+	l, err := reg.StartLogin(ctx, email, users.Request{Purpose: users.PurposeDirect, Agent: "командная строка"}, time.Now())
+	if err != nil {
+		return err
+	}
+	public := os.Getenv("LIBRARIAN_PUBLIC_URL")
+	if public == "" {
+		public = "http://127.0.0.1:8090"
+	}
+	fmt.Fprintf(out, "%s/login/confirm?t=%s\nДействует до %s, один раз.\n", strings.TrimRight(public, "/"), l.Link, l.Expires.Local().Format("15:04"))
 	return nil
 }
 

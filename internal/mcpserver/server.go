@@ -53,7 +53,12 @@ type Server struct {
 	mu       sync.Mutex
 	catalogs map[string]*catalog.Catalog
 	servers  map[string]*mcp.Server
+
+	web http.Handler
 }
+
+// SetWeb gives every path but /health and /mcp to the web interface (ADR-0007).
+func (s *Server) SetWeb(h http.Handler) { s.web = h }
 
 // New prepares a server over the data root.
 func New(home string) *Server {
@@ -73,7 +78,8 @@ func (s *Server) Close() error {
 
 type ctxKey struct{}
 
-// Handler is the HTTP handler: /health is open, everything else needs a token.
+// Handler is the HTTP handler: /health is open, /mcp needs a token, the rest
+// is the web interface when one is set.
 func (s *Server) Handler() http.Handler {
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		a, _ := r.Context().Value(ctxKey{}).(*account.Account)
@@ -91,7 +97,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok\n"))
 	})
-	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if s.web != nil {
+		mux.Handle("/", s.web)
+	}
+	mux.Handle("/mcp", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		a, err := account.Authenticate(s.home, strings.TrimSpace(tok))
 		if !ok || err != nil {
@@ -111,7 +120,7 @@ func (s *Server) forAccount(a *account.Account) (*mcp.Server, error) {
 	if srv, ok := s.servers[a.ID]; ok {
 		return srv, nil
 	}
-	c, err := catalog.Open(a.CatalogPath())
+	c, err := s.catalog(a)
 	if err != nil {
 		return nil, err
 	}
@@ -126,8 +135,27 @@ func (s *Server) forAccount(a *account.Account) (*mcp.Server, error) {
 		Description: "Уточнить документ со слов пользователя: человек, характеристики, дата. Правка помечается как правка ассистента до подтверждения владельцем."}, t.update)
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_document",
 		Description: "Документ по id: резюме (по умолчанию), суть (essential) или дословный текст (verbatim)."}, t.get)
-	s.catalogs[a.ID], s.servers[a.ID] = c, srv
+	s.servers[a.ID] = srv
 	return srv, nil
+}
+
+// Catalog returns the account's catalog, opened once and shared with the web.
+func (s *Server) Catalog(a *account.Account) (*catalog.Catalog, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.catalog(a)
+}
+
+func (s *Server) catalog(a *account.Account) (*catalog.Catalog, error) {
+	if c, ok := s.catalogs[a.ID]; ok {
+		return c, nil
+	}
+	c, err := catalog.Open(a.CatalogPath())
+	if err != nil {
+		return nil, err
+	}
+	s.catalogs[a.ID] = c
+	return c, nil
 }
 
 type tools struct{ cat *catalog.Catalog }
@@ -227,25 +255,6 @@ func (t *tools) search(ctx context.Context, _ *mcp.CallToolRequest, in searchIn)
 	return nil, out, nil
 }
 
-// dateSource tells the assistant how sure the date is.
-func dateSource(s string) string {
-	switch s {
-	case "model:stated":
-		return "указана в документе как его дата"
-	case "model:event":
-		return "дата события, которое документ фиксирует"
-	case "model:":
-		return "прочитана из текста документа"
-	case "summary":
-		return "из первой фразы резюме"
-	case "manual":
-		return "уточнена владельцем"
-	case "assistant":
-		return "уточнена ассистентом, владелец не подтвердил"
-	}
-	return s
-}
-
 // --- update_document ---------------------------------------------------------
 
 type updateIn struct {
@@ -317,7 +326,7 @@ func (t *tools) update(ctx context.Context, _ *mcp.CallToolRequest, in updateIn)
 	if out.Date, out.DatePartial, source, err = t.cat.DocDateOf(ctx, in.ID); err != nil {
 		return nil, updateOut{}, err
 	}
-	out.DateSource = dateSource(source)
+	out.DateSource = catalog.DateSourceLabel(source)
 	persons, err := t.cat.DocPersons(ctx, in.ID)
 	if err != nil {
 		return nil, updateOut{}, err
@@ -394,7 +403,7 @@ func (t *tools) get(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp
 	if err != nil {
 		return nil, getOut{}, err
 	}
-	out := getOut{ID: d.ID, Date: date, DatePartial: partial, DateSource: dateSource(source), Persons: nonNil(persons),
+	out := getOut{ID: d.ID, Date: date, DatePartial: partial, DateSource: catalog.DateSourceLabel(source), Persons: nonNil(persons),
 		Pages: d.LastPage - d.FirstPage + 1, Layer: layer, Attrs: attrs, Batches: batches, Review: nonNil(review)}
 	switch layer {
 	case "summary":

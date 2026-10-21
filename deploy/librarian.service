@@ -8,6 +8,7 @@ Type=simple
 User=librarian
 Group=librarian
 WorkingDirectory=/var/lib/librarian
+UMask=0077
 EnvironmentFile=/etc/librarian/librarian.env
 ExecStart=/usr/local/bin/librarian serve --addr 127.0.0.1:8090
 Restart=on-failure

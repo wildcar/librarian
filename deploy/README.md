@@ -23,3 +23,8 @@ Certificate: `certbot certonly --webroot -w /var/www/html -d lib.wildcar.ru` (th
 
 Connecting an assistant: MCP URL `https://lib.wildcar.ru/mcp`, header `Authorization: Bearer <account token>`
 (`librarian token create --account <id>`; one token per account, a new one replaces the old).
+
+Web interface (ADR-0007): the same address, every path but `/mcp` and `/health`. The env file sets
+`LIBRARIAN_PUBLIC_URL=https://lib.wildcar.ru`, `SMTP_ADDR=127.0.0.1:25` (local Postfix, no login) and
+`MAIL_FROM=library@wildcar.ru`. An e-mail logs in only after `librarian account email <id> <e-mail>`;
+`librarian login-link <e-mail>` prints a one-time link when a letter does not arrive.

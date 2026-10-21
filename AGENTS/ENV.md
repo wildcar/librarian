@@ -72,6 +72,8 @@ LIBRARIAN_TESSERACT=$LOCALAPPDATA/Programs/Tesseract-OCR/tesseract.exe LIBRARIAN
 ### Server
 
 - Service: systemd `librarian.service` (`librarian serve` on 127.0.0.1:8090) behind Apache vhost `lib.wildcar.ru` with a webroot Let's Encrypt certificate; copies of all three files in `deploy/`. Logs: `journalctl -u librarian`, `/var/log/apache2/lib.*.log`.
+- Mail: Postfix (`myhostname = mail.wildcar.ru`, `home_mailbox = mail/`) takes the service's letters on 127.0.0.1:25 without a login; outbound port 25 is open. `wildcar.ru` has no SPF/DKIM/DMARC/MX and 95.165.109.250 has no PTR (2026-10-21): Gmail rejects such mail; delivery to mail.ru worked. Local test: bind `postmaster@wildcar.ru`, the letter lands in `/root/mail/new/`; unbind afterwards.
+- The web registry `/var/lib/librarian/service.sqlite` must stay 0600 (e-mails); the unit sets `UMask=0077`.
 - Apache must not preserve the Host header for the MCP proxy: the Go MCP SDK rejects non-loopback Host on a loopback listener (403 «invalid Host header»).
 - Ubuntu's tesseract is built with OpenMP: parallel processes starve each other (5 pages: over 3 min instead of 24 s). `pages.Tesseract.Read` sets `OMP_THREAD_LIMIT=1`; do the same when running tesseract by hand in parallel.
 - The service user reads Nextcloud data only through ACLs: traverse (`--x`) on the parent folders and read-only `rX` (plus default ACL) on each source folder. Do not add `librarian` to `www-data`: that group can write all Nextcloud files.
