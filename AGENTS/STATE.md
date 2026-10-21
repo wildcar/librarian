@@ -37,7 +37,7 @@ an MCP server from any AI assistant.
 
 ## Next
 
-- Mail: SPF, DKIM (OpenDKIM in Postfix), DMARC, MX for wildcar.ru (owner's DNS) and PTR 95.165.109.250 → mail.wildcar.ru (the provider).
+- Mail: OpenDKIM signs since 2026-10-22; owner adds SPF, DKIM, DMARC, MX and A `mail.wildcar.ru` at masterhost and asks MGTS for PTR 95.165.109.250 → mail.wildcar.ru; then check with `opendkim-testkey` and a letter to Gmail.
 - OAuth 2.1 for MCP with the same letter, the assistant named in it; «Ассистенты» page; the assistant's name in the refinement log.
 - Background pipeline in `serve` and `librarian run`; uploads: files, a server folder within allowed roots, cloud links (ADR-0007).
 - Characteristics read from documents by a model (kind of document, specialty, organisation kind), `source = model`, same table as batch characteristics.
