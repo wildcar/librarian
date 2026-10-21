@@ -102,7 +102,7 @@ Analysis
 
 Output
 
-12. ✅ MCP server (`librarian serve`, ADR-0004): `list_persons`, `search_documents`, `get_document`. ⏳ Then: `list_persons`, `search_documents`, `get_document` (summary by default, essential text on request), `get_file` (original, for verification), `add_document`, `list_inbox` / `resolve_inbox`, `export_person` / `import_person` (draft names, ADR-0004, ADR-0005).
+12. ✅ MCP server (`librarian serve`, ADR-0004): `list_persons`, `search_documents`, `get_document`. `search_documents` without words lists every document, newest first, undated last; it returns `total` and `next_offset` for paging (`offset`, `limit` ≤ 50). `missing` names characteristics that may be absent (`date`, `person`): alone it finds documents lacking them, next to a filter on the same characteristic it widens the filter to them. Every document carries `review`: the kinds of open checks (page reading, split, summary), never the text a check caught. ⏳ Then: `list_persons`, `search_documents`, `get_document` (summary by default, essential text on request), `get_file` (original, for verification), `add_document`, `list_inbox` / `resolve_inbox`, `export_person` / `import_person` (draft names, ADR-0004, ADR-0005).
 13. ⏳ Archive tree per account with standard names `YYYY-MM-DD <PERSON> <Title>.<ext>` (`docs/filing.md`), usable as an export.
 14. ⏳ Virtual collections: saved catalog queries, materialised as `Коллекции/<name>.md` and available through MCP.
 

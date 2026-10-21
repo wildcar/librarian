@@ -4,6 +4,13 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-21 · Search pages through the whole archive; review reasons
+- What: search_documents returns total and next_offset, lists everything without words, searches by absent date/person (`missing`); `review` lists kinds of open checks in search and get_document.
+- Why: an assistant's feedback could not tell whether it had seen the whole archive (59 of 60) or what needs_review meant.
+- Files: internal/catalog/persons.go, internal/mcpserver/server.go, internal/mcpserver/server_test.go, AGENTS/SPEC.md, AGENTS/MEMORY.md
+- Fixes-on-the-fly: get_document `checks` echoed the leak check's hit (a caught name); reasons now name the kind only.
+- Next: document date as creation date with no undated dated documents (replace DateFromSummary); open characteristics and tags.
+
 ## 2026-10-21 · Service deployed at lib.wildcar.ru
 - What: systemd unit, Apache HTTPS proxy with Let's Encrypt and a reload hook, account token; copies in deploy/.
 - Why: assistants connect from anywhere (STATE Next).

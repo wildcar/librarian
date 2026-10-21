@@ -175,8 +175,19 @@ type SearchQuery struct {
 	Person   string // person code
 	DateFrom string // YYYY-MM-DD, inclusive
 	DateTo   string
-	Limit    int
+	// Missing names characteristics (MissingDate, MissingPerson) that may be
+	// absent: with a filter on that characteristic, a document without it
+	// also passes; without a filter, only documents lacking it pass.
+	Missing []string
+	Offset  int
+	Limit   int // 1..50, 20 by default
 }
+
+// Characteristics a search can ask to be absent.
+const (
+	MissingDate   = "date"
+	MissingPerson = "person"
+)
 
 // Hit is one search result: metadata and the de-identified summary only.
 type Hit struct {
@@ -185,11 +196,19 @@ type Hit struct {
 	Persons []string
 	Pages   int
 	Summary string
-	Flagged bool
+	Review  []string // what the owner still has to check; empty when nothing
 }
 
-// Search finds documents. It never returns source paths or the essential text.
-func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, error) {
+// Search finds documents and counts all that match, so a caller can page
+// through every one of them. It never returns source paths or the essential text.
+func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error) {
+	missing := map[string]bool{}
+	for _, m := range q.Missing {
+		if m != MissingDate && m != MissingPerson {
+			return nil, 0, fmt.Errorf("search: unknown characteristic %q", m)
+		}
+		missing[m] = true
+	}
 	where := []string{"t.status IN ('done', 'flagged')"}
 	args := []any{}
 	from := "documents d JOIN texts t ON t.doc_id = d.id"
@@ -202,48 +221,140 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, error) {
 		args = append(args, m)
 		order = "bm25(docs_fts, 0.0, 2.0, 1.0), " + order
 	}
-	if q.Person != "" {
+
+	const noPerson = "NOT EXISTS (SELECT 1 FROM doc_persons dp WHERE dp.doc_id = d.id)"
+	switch {
+	case q.Person != "" && missing[MissingPerson]:
+		where = append(where, "(d.id IN (SELECT doc_id FROM doc_persons WHERE code = ?) OR "+noPerson+")")
+		args = append(args, q.Person)
+	case q.Person != "":
 		where = append(where, "d.id IN (SELECT doc_id FROM doc_persons WHERE code = ?)")
 		args = append(args, q.Person)
+	case missing[MissingPerson]:
+		where = append(where, noPerson)
 	}
+
+	var dates []string
 	if q.DateFrom != "" {
-		where = append(where, "t.doc_date >= ?")
+		dates = append(dates, "t.doc_date >= ?")
 		args = append(args, q.DateFrom)
 	}
 	if q.DateTo != "" {
-		where = append(where, "t.doc_date <= ?")
+		dates = append(dates, "t.doc_date <= ?")
 		args = append(args, q.DateTo)
 	}
+	const noDate = "COALESCE(t.doc_date, '') = ''"
+	switch {
+	case len(dates) > 0 && missing[MissingDate]:
+		where = append(where, "("+strings.Join(dates, " AND ")+" OR "+noDate+")")
+	case len(dates) > 0:
+		where = append(where, dates...)
+	case missing[MissingDate]:
+		where = append(where, noDate)
+	}
+
+	cond := " FROM " + from + " WHERE " + strings.Join(where, " AND ")
+	var total int
+	if err := c.db.QueryRowContext(ctx, "SELECT COUNT(*)"+cond, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("search: %w", err)
+	}
 	limit := q.Limit
-	if limit <= 0 || limit > 50 {
+	if limit <= 0 {
 		limit = 20
 	}
+	limit = min(limit, 50)
 	rows, err := c.db.QueryContext(ctx, `
-		SELECT d.id, COALESCE(t.doc_date, ''), d.last_page - d.first_page + 1, COALESCE(t.summary, ''), t.status = 'flagged'
-		FROM `+from+`
-		WHERE `+strings.Join(where, " AND ")+`
-		ORDER BY `+order+` LIMIT `+fmt.Sprint(limit), args...)
+		SELECT d.id, COALESCE(t.doc_date, ''), d.last_page - d.first_page + 1, COALESCE(t.summary, '')`+cond+`
+		ORDER BY `+order+fmt.Sprintf(" LIMIT %d OFFSET %d", limit, max(q.Offset, 0)), args...)
 	if err != nil {
-		return nil, fmt.Errorf("search: %w", err)
+		return nil, 0, fmt.Errorf("search: %w", err)
 	}
 	defer rows.Close()
 	var out []Hit
 	for rows.Next() {
 		var h Hit
-		if err := rows.Scan(&h.DocID, &h.Date, &h.Pages, &h.Summary, &h.Flagged); err != nil {
-			return nil, fmt.Errorf("search: %w", err)
+		if err := rows.Scan(&h.DocID, &h.Date, &h.Pages, &h.Summary); err != nil {
+			return nil, 0, fmt.Errorf("search: %w", err)
 		}
 		out = append(out, h)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for i := range out {
 		if out[i].Persons, err = c.DocPersons(ctx, out[i].DocID); err != nil {
-			return nil, err
+			return nil, 0, err
+		}
+		if out[i].Review, err = c.DocReview(ctx, out[i].DocID); err != nil {
+			return nil, 0, err
+		}
+	}
+	return out, total, nil
+}
+
+// DocReview says what the owner still has to check in a document: pages the
+// second reading doubted, a split the rules disputed, failed summary checks.
+// The reasons name the kind of problem only, never the text that caused it,
+// because a leak check's hit is the very personal data it caught.
+func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error) {
+	var out []string
+	rows, err := c.db.QueryContext(ctx, `
+		SELECT p.page - d.first_page + 1 FROM documents d
+		JOIN pages p ON p.sha256 = d.sha256 AND p.page BETWEEN d.first_page AND d.last_page
+		WHERE d.id = ? AND p.flagged = 1 ORDER BY p.page`, docID)
+	if err != nil {
+		return nil, fmt.Errorf("review %s: %w", docID, err)
+	}
+	for rows.Next() {
+		var n int
+		if err := rows.Scan(&n); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("review %s: %w", docID, err)
+		}
+		out = append(out, fmt.Sprintf("распознавание: страница %d прочитана с сомнениями", n))
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var split, status, flags sql.NullString
+	err = c.db.QueryRowContext(ctx, `
+		SELECT s.status, t.status, t.flags FROM documents d
+		LEFT JOIN split s ON s.sha256 = d.sha256
+		LEFT JOIN texts t ON t.doc_id = d.id
+		WHERE d.id = ?`, docID).Scan(&split, &status, &flags)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("review %s: %w", docID, err)
+	}
+	if split.String == SplitReview {
+		out = append(out, "разбивка: границы документа не подтверждены")
+	}
+	if status.String == TextsFlagged {
+		seen := map[string]bool{}
+		for _, f := range strings.Split(flags.String, "; ") {
+			r := summaryReason(f)
+			if !seen[r] {
+				seen[r] = true
+				out = append(out, r)
+			}
 		}
 	}
 	return out, nil
+}
+
+// summaryReason turns a stored summary flag (internal/layers) into its kind.
+func summaryReason(flag string) string {
+	switch {
+	case strings.HasPrefix(flag, "утечка"):
+		return "резюме: возможны персональные данные"
+	case strings.HasPrefix(flag, "нет в тексте"):
+		return "резюме: число или дата, которых нет в документе"
+	case strings.HasPrefix(flag, "пустое резюме"):
+		return "резюме: пустое"
+	default:
+		return "резюме: проверка не прошла"
+	}
 }
 
 // ftsQuery turns free words into an FTS5 query: every word must occur, as a

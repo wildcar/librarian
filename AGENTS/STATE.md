@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- An assistant worked through `lib.wildcar.ru` (2026-10-21); its feedback led to paging and absence search: `search_documents` returns `total`/`next_offset`, lists all without words, `missing: [date|person]`; `review` lists kinds of open checks.
 - Service live at `https://lib.wildcar.ru/mcp` (systemd + Apache + Let's Encrypt, files in `deploy/`); checked over HTTPS: initialize, tools/list, list_persons, search, wrong token 401.
 - Ubuntu server `homesrv` is dev and prod (toolchain, user `librarian`, `/var/lib/librarian`, env files). Sample run there (account `sergey`, from Nextcloud): 156 pages OCR $1.38, 1 flagged page; 68 documents, split $0.23, 0 reviews; digest $0.063, 1 flagged summary; 60 of 68 linked to the person.
 - Unlinked 8: 4 carry the name only in handwriting where OCR misread the initials (surname and birth year are right); 4 have no name at all.
@@ -31,10 +32,11 @@ an MCP server from any AI assistant.
 
 ## Next
 
+- Document date = creation date for every dated document (a referral written 12.09 for 08.10 now ends up undated because the summary's first sentence has two dates); replace `DateFromSummary`.
+- Open characteristics and tags per document (differ by kind: a photo vs a referral), searchable by presence/absence; library stays general-purpose (MEMORY).
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
 - One command that runs the whole pipeline for new files (ingest → extract → split → digest → index), and `add_document` over MCP.
 - Person matching: surname plus birth year near each other as a weak signal (covers the 4 misread handwritten names); the rest go to the inbox for manual linking.
-- Connect a real assistant (Claude, ChatGPT) to `lib.wildcar.ru` and try real questions.
 - Inbox for the owner: unlinked documents, flagged summaries, split reviews.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.

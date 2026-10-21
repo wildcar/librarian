@@ -20,6 +20,11 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - Connecting an assistant must stay simple: MCP address + account token; OAuth later (user, 2026-10-19).
 - Persons are never shared between accounts; sharing is export from one account and import into another (user, 2026-10-19). Why: shared ownership is too fragile.
 - Originals are only for verification against the primary source; analysis uses the essential text, most requests the de-identified summary without patient, doctor or clinic (user, 2026-10-19, ADR-0005).
+- The library is general-purpose: medicine is the first example; tickets, car insurance, contracts, notes and appliance manuals follow (user, 2026-10-21). Why: no domain schemas (lab trends, medication history, referral chains) in the core; the librarian extracts as much as each document gives.
+- A document with missing facts stays in circulation with less information; later work only refines (date, person link, outdated facts). Answers state that a document is ambiguous instead of guessing (user, 2026-10-21).
+- Characteristics are open, not a fixed column set: tags and per-document characteristics that differ by kind (a photo has a different set from a referral); search must be able to ask for an absent characteristic or treat a filter as optional, rather than special-purpose filters (user, 2026-10-21; tags still an idea).
+- The document date is its creation date (a referral written on 12 Sept for 8 Oct is dated 12 Sept) and is the most important date; every dated document must get it. Upload date is secondary, for recalling batches (user, 2026-10-21).
+- A doctor's specialty belongs in the summary: it is not personal data (user, 2026-10-21).
 
 ## Project facts
 

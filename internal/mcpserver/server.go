@@ -21,11 +21,17 @@ import (
 
 // Instructions tell the assistant how to use the archive.
 const Instructions = `Архив документов одного аккаунта: документы нескольких людей (list_persons).
-search_documents ищет по смыслу слов и фильтрует по человеку и датам; get_document отдаёт документ.
+search_documents ищет по словам и фильтрует по человеку и датам; без слов перечисляет все документы,
+новые первыми. total — сколько документов подходит всего; пока есть next_offset, повтори запрос
+с offset=next_offset, чтобы просмотреть все. get_document отдаёт документ.
+У документа может не быть даты или человека: так бывает, документ от этого не хуже, по нему просто
+меньше известно. missing=["date"] без фильтра по дате находит документы без даты, а вместе с
+date_from/date_to — документы в периоде или без даты; так же missing=["person"] и person.
+Если в документе нет однозначного ответа, так и скажи, не додумывай.
 По умолчанию отдаются только резюме без персональных данных. Суть документа (layer=essential) и
 дословный текст (layer=verbatim) запрашивай, только если резюме не хватает для ответа: в них есть
-имена, номера и названия организаций. needs_review=true значит, что проверка резюме или разбивки
-не прошла и владелец ещё не подтвердил документ.`
+имена, номера и названия организаций. review перечисляет, что владелец ещё не проверил
+(распознавание страницы, границы документа, резюме); пустой список — замечаний нет.`
 
 // Server serves the MCP endpoint for every account under one data root.
 type Server struct {
@@ -102,7 +108,7 @@ func (s *Server) forAccount(a *account.Account) (*mcp.Server, error) {
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_persons",
 		Description: "Люди, чьи документы хранит аккаунт: код, метка и число документов. Полных имён нет."}, t.listPersons)
 	mcp.AddTool(srv, &mcp.Tool{Name: "search_documents",
-		Description: "Поиск документов по словам, человеку и датам. Возвращает резюме без персональных данных."}, t.search)
+		Description: "Поиск и перечисление документов по словам, человеку и датам, с отсутствующими характеристиками и постранично. Возвращает резюме без персональных данных."}, t.search)
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_document",
 		Description: "Документ по id: резюме (по умолчанию), суть (essential) или дословный текст (verbatim)."}, t.get)
 	s.catalogs[a.ID], s.servers[a.ID] = c, srv
@@ -140,24 +146,28 @@ func (t *tools) listPersons(ctx context.Context, _ *mcp.CallToolRequest, _ noInp
 // --- search_documents --------------------------------------------------------
 
 type searchIn struct {
-	Query    string `json:"query,omitempty" jsonschema:"слова для поиска, например «кардиолог эхокардиография»"`
-	Person   string `json:"person,omitempty" jsonschema:"код человека из list_persons"`
-	DateFrom string `json:"date_from,omitempty" jsonschema:"не раньше этой даты документа, ГГГГ-ММ-ДД"`
-	DateTo   string `json:"date_to,omitempty" jsonschema:"не позже этой даты документа, ГГГГ-ММ-ДД"`
-	Limit    int    `json:"limit,omitempty" jsonschema:"сколько документов вернуть, до 50 (по умолчанию 20)"`
+	Query    string   `json:"query,omitempty" jsonschema:"слова для поиска, например «кардиолог эхокардиография»"`
+	Person   string   `json:"person,omitempty" jsonschema:"код человека из list_persons"`
+	DateFrom string   `json:"date_from,omitempty" jsonschema:"не раньше этой даты документа, ГГГГ-ММ-ДД"`
+	DateTo   string   `json:"date_to,omitempty" jsonschema:"не позже этой даты документа, ГГГГ-ММ-ДД"`
+	Missing  []string `json:"missing,omitempty" jsonschema:"характеристики, которых может не быть: date, person. Без фильтра по ней — только документы без неё; с фильтром — подходящие по фильтру или без неё"`
+	Offset   int      `json:"offset,omitempty" jsonschema:"сколько первых документов пропустить: next_offset из прошлого ответа"`
+	Limit    int      `json:"limit,omitempty" jsonschema:"сколько документов вернуть, до 50 (по умолчанию 20)"`
 }
 
 type docOut struct {
-	ID          string   `json:"id"`
-	Date        string   `json:"date,omitempty"`
-	Persons     []string `json:"persons"`
-	Pages       int      `json:"pages"`
-	Summary     string   `json:"summary"`
-	NeedsReview bool     `json:"needs_review"`
+	ID      string   `json:"id"`
+	Date    string   `json:"date,omitempty"`
+	Persons []string `json:"persons"`
+	Pages   int      `json:"pages"`
+	Summary string   `json:"summary"`
+	Review  []string `json:"review"`
 }
 
 type searchOut struct {
-	Documents []docOut `json:"documents"`
+	Total      int      `json:"total"`
+	NextOffset int      `json:"next_offset,omitempty"`
+	Documents  []docOut `json:"documents"`
 }
 
 var isoDate = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
@@ -168,16 +178,28 @@ func (t *tools) search(ctx context.Context, _ *mcp.CallToolRequest, in searchIn)
 			return nil, searchOut{}, fmt.Errorf("дата %q: нужен формат ГГГГ-ММ-ДД", d)
 		}
 	}
-	hits, err := t.cat.Search(ctx, catalog.SearchQuery{
-		Text: in.Query, Person: in.Person, DateFrom: in.DateFrom, DateTo: in.DateTo, Limit: in.Limit,
+	for _, m := range in.Missing {
+		if m != catalog.MissingDate && m != catalog.MissingPerson {
+			return nil, searchOut{}, fmt.Errorf("missing: %q — допустимы date и person", m)
+		}
+	}
+	if in.Offset < 0 {
+		return nil, searchOut{}, fmt.Errorf("offset не может быть отрицательным")
+	}
+	hits, total, err := t.cat.Search(ctx, catalog.SearchQuery{
+		Text: in.Query, Person: in.Person, DateFrom: in.DateFrom, DateTo: in.DateTo,
+		Missing: in.Missing, Offset: in.Offset, Limit: in.Limit,
 	})
 	if err != nil {
 		return nil, searchOut{}, err
 	}
-	out := searchOut{Documents: []docOut{}}
+	out := searchOut{Total: total, Documents: []docOut{}}
 	for _, h := range hits {
 		out.Documents = append(out.Documents, docOut{ID: h.DocID, Date: h.Date, Persons: nonNil(h.Persons),
-			Pages: h.Pages, Summary: h.Summary, NeedsReview: h.Flagged})
+			Pages: h.Pages, Summary: h.Summary, Review: nonNil(h.Review)})
+	}
+	if next := in.Offset + len(hits); len(hits) > 0 && next < total {
+		out.NextOffset = next
 	}
 	return nil, out, nil
 }
@@ -197,15 +219,14 @@ type getIn struct {
 }
 
 type getOut struct {
-	ID          string   `json:"id"`
-	Date        string   `json:"date,omitempty"`
-	DateSource  string   `json:"date_source,omitempty"`
-	Persons     []string `json:"persons"`
-	Pages       int      `json:"pages"`
-	Layer       string   `json:"layer"`
-	Text        string   `json:"text"`
-	NeedsReview bool     `json:"needs_review"`
-	Checks      string   `json:"checks,omitempty"`
+	ID         string   `json:"id"`
+	Date       string   `json:"date,omitempty"`
+	DateSource string   `json:"date_source,omitempty"`
+	Persons    []string `json:"persons"`
+	Pages      int      `json:"pages"`
+	Layer      string   `json:"layer"`
+	Text       string   `json:"text"`
+	Review     []string `json:"review"`
 }
 
 func (t *tools) get(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, getOut, error) {
@@ -228,8 +249,12 @@ func (t *tools) get(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp
 	if err != nil {
 		return nil, getOut{}, err
 	}
+	review, err := t.cat.DocReview(ctx, d.ID)
+	if err != nil {
+		return nil, getOut{}, err
+	}
 	out := getOut{ID: d.ID, Date: date, DateSource: source, Persons: nonNil(persons),
-		Pages: d.LastPage - d.FirstPage + 1, Layer: layer, NeedsReview: tx.Status == catalog.TextsFlagged, Checks: tx.Flags}
+		Pages: d.LastPage - d.FirstPage + 1, Layer: layer, Review: nonNil(review)}
 	switch layer {
 	case "summary":
 		out.Text = tx.Summary

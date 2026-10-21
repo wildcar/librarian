@@ -167,3 +167,117 @@ func TestServerIsolationAndTools(t *testing.T) {
 		t.Errorf("beta search: %s", ob)
 	}
 }
+
+// addDoc adds a one-page document to an account's catalog; summary decides
+// the date, essential decides the person link (index.Run).
+func addDoc(t *testing.T, c *catalog.Catalog, sha, summary, essential string, tx catalog.Texts, flagPage bool) string {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := c.RecordSeen(ctx, catalog.Seen{URI: "file:///in/" + sha[:4] + ".pdf", SHA256: sha, Size: 1, MTime: now, MIME: "application/pdf", At: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SavePage(ctx, catalog.Page{SHA256: sha, Page: 1, Method: "ocr", Engine: "t", Text: essential, Pipeline: 1}, now); err != nil {
+		t.Fatal(err)
+	}
+	if flagPage {
+		if err := c.SaveCheck(ctx, sha, 1, catalog.PageCheck{Engine: "tesseract", Flagged: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.SaveSplit(ctx, catalog.SplitResult{SHA256: sha, Status: catalog.SplitDone, Method: "single", Engine: "-", Pipeline: 1, Starts: []int{1}, Pages: 1}, now); err != nil {
+		t.Fatal(err)
+	}
+	doc := catalog.DocumentID(sha, 1)
+	tx.DocID, tx.Summary, tx.Essential, tx.Model, tx.Pipeline = doc, summary, essential, "t", 1
+	if tx.Status == "" {
+		tx.Status = catalog.TextsDone
+	}
+	if err := c.SaveTexts(ctx, tx, now); err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
+func ids(t *testing.T, out map[string]any) []string {
+	t.Helper()
+	var r []string
+	docs, _ := out["documents"].([]any)
+	for _, d := range docs {
+		r = append(r, d.(map[string]any)["id"].(string))
+	}
+	return r
+}
+
+func TestSearchPagingMissingAndReview(t *testing.T) {
+	home := t.TempDir()
+	tok, dated := seed(t, home, "gamma", "Иванов Петр Сергеевич",
+		"Протокол эхокардиографии от 02.04.2022: пациент, кардиолог, норма.", "Эхокардиография: норма.")
+	a, err := account.Open(home, "gamma")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := catalog.Open(a.CatalogPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer := addDoc(t, c, strings.Repeat("2", 64), "Направление от 12.09.2023 на МРТ.", "Пациент: Иванов Петр Сергеевич\nМРТ.", catalog.Texts{}, false)
+	bare := addDoc(t, c, strings.Repeat("3", 64), "Фотография инструкции к чайнику.", "Чайник. Сидоров.",
+		catalog.Texts{Status: catalog.TextsFlagged, Flags: "утечка «Сидоров»; нет в тексте «28»"}, true)
+	if _, err := index.Run(context.Background(), c, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+
+	srv := mcpserver.New(home)
+	defer srv.Close()
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+	s := connect(t, ts.URL+"/mcp", tok)
+
+	// Paging walks every document exactly once: newest first, undated last.
+	p1, _ := call(t, s, "search_documents", map[string]any{"limit": 2})
+	if p1["total"] != float64(3) || p1["next_offset"] != float64(2) || strings.Join(ids(t, p1), ",") != newer+","+dated {
+		t.Errorf("page 1: %v", p1)
+	}
+	p2, _ := call(t, s, "search_documents", map[string]any{"limit": 2, "offset": 2})
+	if _, more := p2["next_offset"]; more || strings.Join(ids(t, p2), ",") != bare {
+		t.Errorf("page 2: %v", p2)
+	}
+
+	// An absent characteristic is searchable on its own and next to a filter.
+	for name, tc := range map[string]struct {
+		args map[string]any
+		want []string
+	}{
+		"no date":           {map[string]any{"missing": []string{"date"}}, []string{bare}},
+		"period or no date": {map[string]any{"date_from": "2023-01-01", "missing": []string{"date"}}, []string{newer, bare}},
+		"no person":         {map[string]any{"missing": []string{"person"}}, []string{bare}},
+		"person or nobody":  {map[string]any{"person": "Pg", "missing": []string{"person"}}, []string{newer, dated, bare}},
+		"person only":       {map[string]any{"person": "Pg"}, []string{newer, dated}},
+	} {
+		out, isErr := call(t, s, "search_documents", tc.args)
+		if got := ids(t, out); isErr || strings.Join(got, ",") != strings.Join(tc.want, ",") || out["total"] != float64(len(tc.want)) {
+			t.Errorf("%s: %v", name, out)
+		}
+	}
+	if _, isErr := call(t, s, "search_documents", map[string]any{"missing": []string{"colour"}}); !isErr {
+		t.Error("unknown characteristic accepted")
+	}
+
+	// Review names the kind of problem and never the leaked word itself.
+	got, _ := call(t, s, "get_document", map[string]any{"id": bare})
+	gb, _ := json.Marshal(got["review"])
+	for _, want := range []string{"распознавание: страница 1", "возможны персональные данные", "которых нет в документе"} {
+		if !strings.Contains(string(gb), want) {
+			t.Errorf("review lacks %q: %s", want, gb)
+		}
+	}
+	if strings.Contains(string(gb), "Сидоров") {
+		t.Errorf("review leaks the caught name: %s", gb)
+	}
+	clean, _ := call(t, s, "get_document", map[string]any{"id": dated})
+	if r, ok := clean["review"].([]any); !ok || len(r) != 0 {
+		t.Errorf("clean document review: %v", clean["review"])
+	}
+}
