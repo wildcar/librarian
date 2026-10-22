@@ -187,8 +187,8 @@ func assisted(ctx context.Context, cat *catalog.Catalog, docID string, reasons [
 }
 
 // settle is a button of the inbox or the document page: the owner confirms
-// a disputed split or a doubted page, or accepts or reverts an assistant's
-// refinements. It returns to the page the button was on.
+// a disputed split, a doubted page or a flagged summary, has the summary
+// made again, or accepts or reverts an assistant's refinements. It returns to the page the button was on.
 func (s *Server) settle(w http.ResponseWriter, r *http.Request, v viewer) {
 	ctx, id, now := r.Context(), r.PathValue("id"), s.cfg.Now()
 	if _, _, err := v.Cat.GetDocument(ctx, id); err != nil {
@@ -207,6 +207,15 @@ func (s *Server) settle(w http.ResponseWriter, r *http.Request, v viewer) {
 			return
 		}
 		err = v.Cat.ConfirmPage(ctx, id, page, now)
+	case catalog.FixSummary:
+		if r.FormValue("redo") != "" {
+			err = v.Cat.RedoTexts(ctx, id)
+			if err == nil && s.cfg.Worker != nil {
+				s.cfg.Worker.Kick()
+			}
+		} else {
+			err = v.Cat.ConfirmSummary(ctx, id, now)
+		}
 	case catalog.FixAssistant:
 		if r.FormValue("revert") != "" {
 			_, err = v.Cat.RevertAssistant(ctx, id)

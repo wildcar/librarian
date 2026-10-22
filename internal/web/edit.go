@@ -69,11 +69,76 @@ func (s *Server) editPersons(w http.ResponseWriter, r *http.Request, v viewer) {
 			ch.Unlink = append(ch.Unlink, p.Code)
 		}
 	}
+	fail := func(msg string) {
+		s.showDocument(w, r, v, id, docForm{Edit: "person", Error: msg, Reason: r.FormValue("reason"), New: newPerson(r)})
+	}
 	if len(ticked) > 0 {
-		s.showDocument(w, r, v, id, docForm{Edit: "person", Error: "Такого человека нет в библиотеке.", Reason: r.FormValue("reason")})
+		fail("Такого человека нет в библиотеке.")
 		return
 	}
-	s.change(w, r, v, id, "person", ch)
+	// A new person: added to the account and linked here; the whole account
+	// is indexed again, so other documents naming them are linked too.
+	np := newPerson(r)
+	if np.Code != "" || np.FullName != "" {
+		if np.Code == "" || np.FullName == "" {
+			fail("Для нового человека нужны и код, и полное имя.")
+			return
+		}
+		for _, p := range persons {
+			if p.Code == np.Code {
+				fail("Код " + np.Code + " уже занят: отметьте этого человека в списке.")
+				return
+			}
+		}
+		if np.BirthDate != "" {
+			d, err := parseDate(np.BirthDate)
+			if full, _ := catalog.CheckDate(d); err != nil || !full {
+				fail("Дата рождения: напишите ДД.ММ.ГГГГ.")
+				return
+			}
+			np.BirthDate = d
+		}
+		if _, _, err := v.Cat.GetDocument(ctx, id); err != nil {
+			s.change(w, r, v, id, "person", ch, false) // answers «нет такого документа»
+			return
+		}
+		if err := v.Cat.AddPerson(ctx, np, s.cfg.Now()); err != nil {
+			s.fail(w, err)
+			return
+		}
+		ch.Link = append(ch.Link, np.Code)
+	}
+	s.change(w, r, v, id, "person", ch, np.Code != "")
+}
+
+// newPerson reads the «Новый человек» fields of the person form.
+func newPerson(r *http.Request) catalog.Person {
+	return catalog.Person{
+		Code:      strings.ToUpper(strings.TrimSpace(r.FormValue("new_code"))),
+		FullName:  strings.Join(strings.Fields(r.FormValue("new_name")), " "),
+		Label:     strings.TrimSpace(r.FormValue("new_label")),
+		BirthDate: strings.TrimSpace(r.FormValue("new_birth")),
+	}
+}
+
+// editAttrs gives the document a characteristic or takes one away; one
+// taken away is never derived for it again, from a batch or the text.
+func (s *Server) editAttrs(w http.ResponseWriter, r *http.Request, v viewer) {
+	id := r.PathValue("id")
+	var ch catalog.DocChange
+	if k := r.FormValue("remove"); k != "" {
+		ch.Unset = []catalog.Attr{{Key: k, Value: r.FormValue("value")}}
+	} else {
+		typed := strings.TrimSpace(r.FormValue("attr"))
+		a, err := catalog.ParseAttr(typed)
+		if err != nil {
+			s.showDocument(w, r, v, id, docForm{Edit: "attrs", Error: "Напишите характеристику как «ключ = значение», например «тема = бассейн».",
+				Attr: typed, Reason: r.FormValue("reason")})
+			return
+		}
+		ch.Attrs = []catalog.Attr{a}
+	}
+	s.change(w, r, v, id, "attrs", ch, false)
 }
 
 // editDate sets the document's date, says it has none, or gives the date
@@ -96,11 +161,11 @@ func (s *Server) editDate(w http.ResponseWriter, r *http.Request, v viewer) {
 		}
 		ch.Date = &d
 	}
-	s.change(w, r, v, id, "date", ch)
+	s.change(w, r, v, id, "date", ch, false)
 }
 
 // change applies the owner's refinement, reindexes the document and shows it.
-func (s *Server) change(w http.ResponseWriter, r *http.Request, v viewer, id, form string, ch catalog.DocChange) {
+func (s *Server) change(w http.ResponseWriter, r *http.Request, v viewer, id, form string, ch catalog.DocChange, all bool) {
 	ctx, now := r.Context(), s.cfg.Now()
 	if _, _, err := v.Cat.GetDocument(ctx, id); err != nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -112,7 +177,11 @@ func (s *Server) change(w http.ResponseWriter, r *http.Request, v viewer, id, fo
 		s.showDocument(w, r, v, id, docForm{Edit: form, Error: err.Error(), Date: r.FormValue("date"), Reason: reason})
 		return
 	}
-	if err := index.Doc(ctx, v.Cat, id, now); err != nil {
+	reindex := func() error { return index.Doc(ctx, v.Cat, id, now) }
+	if all {
+		reindex = func() error { _, err := index.Run(ctx, v.Cat, now); return err }
+	}
+	if err := reindex(); err != nil {
 		s.fail(w, err)
 		return
 	}

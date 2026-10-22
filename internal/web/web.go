@@ -121,6 +121,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /doc/{id}/settle", s.authed(s.settle))
 	mux.HandleFunc("POST /doc/{id}/persons", s.authed(s.editPersons))
 	mux.HandleFunc("POST /doc/{id}/date", s.authed(s.editDate))
+	mux.HandleFunc("POST /doc/{id}/attrs", s.authed(s.editAttrs))
 	mux.HandleFunc("GET /inbox", s.authed(s.inbox))
 	mux.HandleFunc("GET /upload", s.authed(s.uploadForm))
 	mux.HandleFunc("POST /upload", s.authed(s.upload))
@@ -456,6 +457,7 @@ type docPage struct {
 	FileLinks                            []string // per file: the original, a PDF at the document's page
 	Choices                              []personChoice
 	ChoicesMade                          bool   // persons were ruled out by hand: no person is a decision
+	Redo                                 bool   // the summary is being made again
 	DateInput                            string // the date as the owner types it
 	ManualDate                           bool   // the owner or an assistant gave the date
 	NoDate                               bool   // ...and said there is none
@@ -465,6 +467,8 @@ type docPage struct {
 // open, its error and what was typed.
 type docForm struct {
 	Edit, Error, Date, Reason string
+	Attr                      string         // a characteristic as typed
+	New                       catalog.Person // a new person as typed
 }
 
 func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
@@ -534,6 +538,9 @@ func (s *Server) showDocument(w http.ResponseWriter, r *http.Request, v viewer, 
 	if err != nil {
 		s.fail(w, err)
 		return
+	}
+	for _, it := range items {
+		p.Redo = p.Redo || it.Text == catalog.RedoReason
 	}
 	if p.Review, err = reviewRows(ctx, v.Cat, id, items); err != nil {
 		s.fail(w, err)

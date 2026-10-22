@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Summary, characteristics and a new person from the page
+- What: «Резюме в порядке» / «Сделать заново» (catalog migration 20: `texts.summary_confirmed`, `texts.redo`; the worker remakes the layers, the old ones serve meanwhile); characteristics added and removed on the document page; a new person from the person form, linked here and by name across the account.
+- Why: owner wants every inbox reason closed from the web.
+- Files: internal/web/{edit,inbox,web}.go, internal/web/templates/{doc,parts}.html, internal/catalog/{texts,persons,catalog}.go
+- Next: DOCX/XLSX or cloud links, owner to choose.
+
 ## 2026-10-22 · The way back keeps its place
 - What: the tree remembers open branches and scroll per tab (`sessionStorage`, branch path by label), the inbox its scroll; «←» on the document page leads to the list it was opened from («Документы» with the same levels, or «Входящие» with its filter).
 - Why: owner found «← Документы» always led to a collapsed tree, even from the inbox.

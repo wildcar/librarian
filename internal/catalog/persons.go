@@ -407,7 +407,11 @@ const (
 	FixSplit     = "split"     // the boundaries hold
 	FixPage      = "page"      // the page was read right
 	FixAssistant = "assistant" // accept or revert the assistant's refinements
+	FixSummary   = "summary"   // accept the summary, or have it made again
 )
+
+// RedoReason is the review item of a document whose layers are made again.
+const RedoReason = "резюме: делается заново"
 
 // ReviewItem is one open check of a document.
 type ReviewItem struct {
@@ -440,11 +444,13 @@ func (c *Catalog) DocReviewItems(ctx context.Context, docID string) ([]ReviewIte
 	}
 
 	var split, status, flags sql.NullString
+	var redo sql.NullBool
 	err = c.db.QueryRowContext(ctx, `
-		SELECT CASE WHEN s.confirmed IS NULL THEN s.status END, t.status, t.flags FROM documents d
+		SELECT CASE WHEN s.confirmed IS NULL THEN s.status END,
+		  CASE WHEN t.summary_confirmed IS NULL THEN t.status END, t.flags, t.redo FROM documents d
 		LEFT JOIN split s ON s.sha256 = d.sha256
 		LEFT JOIN texts t ON t.doc_id = d.id
-		WHERE d.id = ?`, docID).Scan(&split, &status, &flags)
+		WHERE d.id = ?`, docID).Scan(&split, &status, &flags, &redo)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("review %s: %w", docID, err)
 	}
@@ -477,13 +483,22 @@ func (c *Catalog) DocReviewItems(ctx context.Context, docID string) ([]ReviewIte
 	if dateStatus.String == DateRejected {
 		out = append(out, ReviewItem{Text: "дата: названная моделью дата не подтвердилась текстом"})
 	}
+	if redo.Bool {
+		out = append(out, ReviewItem{Text: RedoReason})
+		return out, nil
+	}
 	if status.String == TextsFlagged {
 		seen := map[string]bool{}
 		for _, f := range strings.Split(flags.String, "; ") {
 			r := summaryReason(f)
 			if !seen[r] {
 				seen[r] = true
-				out = append(out, ReviewItem{Text: r})
+				// One pair of buttons settles every summary reason.
+				fix := FixSummary
+				if len(seen) > 1 {
+					fix = ""
+				}
+				out = append(out, ReviewItem{Text: r, Fix: fix})
 			}
 		}
 	}

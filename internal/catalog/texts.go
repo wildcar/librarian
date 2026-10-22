@@ -33,11 +33,12 @@ type Texts struct {
 	CharsBefore        int // not stored: for run reports
 }
 
-// PendingTexts lists documents without text layers (or with a failed run).
+// PendingTexts lists documents without text layers, with a failed run, or
+// whose layers the owner asked to make again.
 func (c *Catalog) PendingTexts(ctx context.Context, limit int) ([]Document, error) {
 	q := `SELECT d.id, d.sha256, d.first_page, d.last_page FROM documents d
 		LEFT JOIN texts t ON t.doc_id = d.id
-		WHERE t.status IS NULL OR t.status = 'error'
+		WHERE t.status IS NULL OR t.status = 'error' OR t.redo = 1
 		ORDER BY d.sha256, d.first_page`
 	if limit > 0 {
 		q += fmt.Sprintf(" LIMIT %d", limit)
@@ -69,7 +70,7 @@ func (c *Catalog) SaveTexts(ctx context.Context, t Texts, at time.Time) error {
 		  summary = excluded.summary, removed = excluded.removed, restored_repeats = excluded.restored_repeats,
 		  restored_suspicious = excluded.restored_suspicious, flags = excluded.flags, error = excluded.error,
 		  model = excluded.model, cost_usd = texts.cost_usd + excluded.cost_usd,
-		  pipeline = excluded.pipeline, updated = excluded.updated,
+		  pipeline = excluded.pipeline, updated = excluded.updated, redo = 0, summary_confirmed = NULL,
 		  title = CASE WHEN texts.summary IS excluded.summary THEN texts.title END,
 		  model_attrs = CASE WHEN texts.summary IS excluded.summary THEN texts.model_attrs END,
 		  model_guessed = CASE WHEN texts.summary IS excluded.summary THEN texts.model_guessed END`,
@@ -79,6 +80,35 @@ func (c *Catalog) SaveTexts(ctx context.Context, t Texts, at time.Time) error {
 		return fmt.Errorf("save texts %s: %w", t.DocID, err)
 	}
 	return nil
+}
+
+// ConfirmSummary records that the owner read a flagged summary and found
+// it fine.
+func (c *Catalog) ConfirmSummary(ctx context.Context, docID string, at time.Time) error {
+	_, err := c.db.ExecContext(ctx, "UPDATE texts SET summary_confirmed = ? WHERE doc_id = ? AND status = 'flagged'",
+		at.UTC().Format(time.RFC3339Nano), docID)
+	if err != nil {
+		return fmt.Errorf("confirm summary of %s: %w", docID, err)
+	}
+	return nil
+}
+
+// RedoTexts asks for a document's essential text and summary to be made
+// again; the old ones stay in use until then. The creation date is read
+// again from the new essential text.
+func (c *Catalog) RedoTexts(ctx context.Context, docID string) error {
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "UPDATE texts SET redo = 1 WHERE doc_id = ?", docID); err != nil {
+		return fmt.Errorf("redo texts of %s: %w", docID, err)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM doc_dates WHERE doc_id = ?", docID); err != nil {
+		return fmt.Errorf("redo texts of %s: %w", docID, err)
+	}
+	return tx.Commit()
 }
 
 // ErrNoDocument is returned for an unknown document id.
@@ -134,7 +164,7 @@ func (c *Catalog) TextsSummary(ctx context.Context) (map[string]int, float64, []
 	}
 	rows.Close()
 	rows, err = c.db.QueryContext(ctx,
-		"SELECT doc_id, COALESCE(flags, ''), COALESCE(error, '') FROM texts WHERE status IN ('flagged', 'error') ORDER BY doc_id")
+		"SELECT doc_id, COALESCE(flags, ''), COALESCE(error, '') FROM texts WHERE status IN ('flagged', 'error') AND summary_confirmed IS NULL ORDER BY doc_id")
 	if err != nil {
 		return nil, 0, nil, fmt.Errorf("texts summary: %w", err)
 	}

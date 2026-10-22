@@ -245,6 +245,10 @@ var schema = []string{
 	// a new split or reading clears it.
 	`ALTER TABLE split ADD COLUMN confirmed TEXT;
 	ALTER TABLE pages ADD COLUMN confirmed TEXT;`,
+	// 20: the owner accepted a flagged summary, or asked for the text layers
+	// to be made again; new layers clear both.
+	`ALTER TABLE texts ADD COLUMN summary_confirmed TEXT;
+	ALTER TABLE texts ADD COLUMN redo INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // Catalog is an open account catalog.

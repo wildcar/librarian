@@ -19,17 +19,31 @@
 <form method="post" action="/doc/{{.D.ID}}/persons">
 {{if and .F.Error (eq .F.Edit "person")}}<p class="err">{{.F.Error}}</p>{{end}}
 {{range .D.Choices}}<label class="check"><input type="checkbox" name="person" value="{{.Code}}"{{if .Checked}} checked{{end}}> {{.Label}} ({{.Code}}){{if .Assistant}} <span class="muted">· ассистент</span>{{end}}</label>{{else}}<p class="muted">В библиотеке ещё нет людей: их добавляют при загрузке.</p>{{end}}
+<details{{if .F.New.FullName}} open{{end}}><summary>Новый человек</summary>
+<div class="grid2">
+<input type="text" name="new_code" value="{{.F.New.Code}}" placeholder="код, например ЕСБ">
+<input type="text" name="new_name" value="{{.F.New.FullName}}" placeholder="полное имя">
+<input type="text" name="new_label" value="{{.F.New.Label}}" placeholder="как называть: Я, Мама…">
+<input type="text" name="new_birth" value="{{.F.New.BirthDate}}" placeholder="дата рождения ДД.ММ.ГГГГ">
+</div><p class="muted">Его привяжут к этому документу и ко всем, где найдётся его имя.</p></details>
 <p class="muted">Отмеченные станут вашими привязками, неотмеченных библиотека больше не привяжет к этому документу. Ни одного не отметить значит, что документ ничей.</p>
 <input type="text" name="reason" value="{{.F.Reason}}" placeholder="почему (необязательно)">
 <div class="row" style="margin-top:8px"><button>Сохранить</button></div>
 </form></details></dd>
-{{if .D.Attrs}}<dt>Характеристики</dt><dd>{{range .D.Attrs}}<span class="chip" title="{{attrsrc .Source}}">{{.Key}}: {{.Value}}{{if eq .Source "model"}} <span class="muted">·&nbsp;по тексту</span>{{else if eq .Source "model:guess"}} <span class="muted">·&nbsp;догадка</span>{{else if eq .Source "assistant"}} <span class="muted">·&nbsp;ассистент</span>{{end}}</span>{{end}}</dd>{{end}}
+<dt>Характеристики</dt><dd>{{range .D.Attrs}}<span class="chip" title="{{attrsrc .Source}}">{{.Key}}: {{.Value}}{{if eq .Source "model"}} <span class="muted">·&nbsp;по тексту</span>{{else if eq .Source "model:guess"}} <span class="muted">·&nbsp;догадка</span>{{else if eq .Source "assistant"}} <span class="muted">·&nbsp;ассистент</span>{{end}}</span>{{else}}<span class="muted">нет</span>{{end}}
+<details class="edit" id="attrs"{{if eq .F.Edit "attrs"}} open{{end}}><summary>изменить</summary>
+<div class="form">
+{{if and .F.Error (eq .F.Edit "attrs")}}<p class="err">{{.F.Error}}</p>{{end}}
+{{range .D.Attrs}}<form method="post" action="/doc/{{$.D.ID}}/attrs" class="attr"><input type="hidden" name="remove" value="{{.Key}}"><input type="hidden" name="value" value="{{.Value}}"><span>{{.Key}}: {{.Value}}</span> <button class="small ghost" title="Библиотека больше не даст документу это значение">Убрать</button></form>{{end}}
+<form method="post" action="/doc/{{.D.ID}}/attrs"><div class="row" style="margin-top:8px"><input type="text" name="attr" value="{{.F.Attr}}" placeholder="ключ = значение, например тема = бассейн" style="flex:1;min-width:200px"><button>Добавить</button></div>
+<input type="text" name="reason" value="{{.F.Reason}}" placeholder="почему (необязательно)" style="margin-top:8px"></form>
+</div></details></dd>
 <dt>{{if gt (len .D.Files) 1}}Файлы{{else}}Файл{{end}}</dt><dd>{{range $i, $f := .D.Files}}<div>{{if .Uploaded}}{{if .Name}}{{.Name}}{{else}}<span class="muted">без имени</span>{{end}} <span class="muted">— загружен через форму</span>{{else}}{{.Name}} <span class="muted">— {{.Path}}{{if .Missing}}, больше нет на месте{{end}}</span>{{end}}{{if not .Missing}} <a class="button small" href="{{index $.D.FileLinks $i}}" target="_blank" rel="noopener">Открыть файл</a>{{end}}</div>{{end}}{{if .D.FirstPage}}<div class="muted">файл откроется на странице {{.D.FirstPage}}, где начинается документ</div>{{end}}</dd>
 <dt>Страниц</dt><dd>{{.D.Pages}}</dd>
 {{if .D.Batches}}<dt>Пачки</dt><dd>{{range $i, $b := .D.Batches}}{{if $i}}, {{end}}№{{$b}}{{end}}</dd>{{end}}
 <dt>Id</dt><dd class="muted">{{.D.ID}}</dd>
 </dl>
-<h2>Резюме</h2>
+<h2>Резюме{{if not .D.Redo}} <form method="post" action="/doc/{{.D.ID}}/settle" style="display:inline"><input type="hidden" name="fix" value="summary"><input type="hidden" name="redo" value="1"><button class="small ghost" title="Модель заново сделает суть и резюме, около $0.001">Сделать заново</button></form>{{end}}</h2>
 <pre>{{.D.Summary}}</pre>
 {{if .D.Essential}}<details open><summary><h2 style="display:inline">Суть</h2></summary><pre>{{.D.Essential}}</pre></details>{{end}}
 {{if .D.Verbatim}}<details><summary><h2 style="display:inline">Дословный текст</h2></summary>

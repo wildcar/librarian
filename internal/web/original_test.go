@@ -251,3 +251,98 @@ func TestEditFromPage(t *testing.T) {
 		t.Errorf("date not given back: %s", page)
 	}
 }
+
+func TestSummaryAttrsAndNewPerson(t *testing.T) {
+	home := t.TempDir()
+	makeAccount(t, home, "acc", "Пациент: Евтушенко Борис Васильевич. ЭКГ")
+	_, second := scanned(t, home, "acc")
+	first := strings.TrimSuffix(second, "-2") + "-1"
+	ctx, now := context.Background(), time.Now()
+	a, _ := account.Open(home, "acc")
+	c, err := catalog.Open(a.CatalogPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	// The first document's summary failed two checks; its text names a
+	// person the account does not know yet.
+	c.SavePage(ctx, catalog.Page{SHA256: mustSHA(t, c, first), Page: 1, Method: "ocr", Engine: "t", Text: "Справка. Иванова Мария Петровна", Pipeline: 1}, now)
+	if err := c.SaveTexts(ctx, catalog.Texts{DocID: first, Status: catalog.TextsFlagged, Summary: "Справка для бассейна.",
+		Essential: "Справка. Иванова Мария Петровна", Flags: "утечка: Иванова; нет в тексте: 5", Model: "t", Pipeline: 1}, now); err != nil {
+		t.Fatal(err)
+	}
+	box := &outbox{}
+	ts, reg := service(t, home, box)
+	reg.SetEmail(ctx, "owner@example.org", "acc", now)
+	b := newBrowser(t, ts.URL)
+	b.do("POST", "/login", url.Values{"email": {"owner@example.org"}})
+	link := regexp.MustCompile(`/login/confirm\?t=([\w-]+)`).FindStringSubmatch(box.last())
+	b.do("POST", "/login/confirm", url.Values{"t": {link[1]}}, "Origin", ts.URL)
+	post := func(path string, form url.Values) (int, string, string) {
+		return b.do("POST", path, form, "Origin", ts.URL)
+	}
+	review := func(doc string) string {
+		r, _ := c.DocReview(ctx, doc)
+		return strings.Join(r, "; ")
+	}
+
+	// Summary: one pair of buttons for both reasons; made again; accepted.
+	_, _, page := b.do("GET", "/inbox", nil)
+	if strings.Count(page, "Резюме в порядке") != 1 || !strings.Contains(page, "резюме: возможны персональные данные") {
+		t.Errorf("summary buttons: %s", page)
+	}
+	post("/doc/"+first+"/settle", url.Values{"fix": {"summary"}, "redo": {"1"}})
+	if r := review(first); !strings.Contains(r, "делается заново") || strings.Contains(r, "персональные") {
+		t.Errorf("after redo: %s", r)
+	}
+	if p, _ := c.PendingTexts(ctx, 0); len(p) != 1 || p[0].ID != first {
+		t.Errorf("pending texts: %+v", p)
+	}
+	if _, _, page := b.do("GET", "/doc/"+first, nil); !strings.Contains(page, "Справка для бассейна") || strings.Contains(page, `name="redo"`) {
+		t.Errorf("old summary while redoing: %s", page)
+	}
+	c.SaveTexts(ctx, catalog.Texts{DocID: first, Status: catalog.TextsFlagged, Summary: "Справка для бассейна.",
+		Essential: "Справка", Flags: "нет в тексте: 5", Model: "t", Pipeline: 1}, now)
+	post("/doc/"+first+"/settle", url.Values{"fix": {"summary"}})
+	if r := review(first); strings.Contains(r, "резюме") {
+		t.Errorf("after accepting: %s", r)
+	}
+
+	// Characteristics: a bad line keeps what was typed; added; taken away.
+	code, _, page := post("/doc/"+second+"/attrs", url.Values{"attr": {"без знака"}})
+	if code != http.StatusBadRequest || !strings.Contains(page, `value="без знака"`) || !strings.Contains(page, `id="attrs" open`) {
+		t.Errorf("bad characteristic: %d", code)
+	}
+	post("/doc/"+second+"/attrs", url.Values{"attr": {"Вид = справка"}})
+	if _, _, page := b.do("GET", "/doc/"+second, nil); !strings.Contains(page, "вид: справка") {
+		t.Errorf("characteristic not added: %s", page)
+	}
+	post("/doc/"+second+"/attrs", url.Values{"remove": {"тема"}, "value": {"бассейн"}})
+	if _, _, page := b.do("GET", "/doc/"+second, nil); strings.Contains(page, "тема: бассейн") {
+		t.Errorf("characteristic not removed: %s", page)
+	}
+
+	// A new person: the code must be free; linked here and, by name, there.
+	if code, _, page := post("/doc/"+second+"/persons", url.Values{"new_code": {"ЕБВ"}, "new_name": {"Кто-то"}}); code != http.StatusBadRequest || !strings.Contains(page, "уже занят") {
+		t.Errorf("taken code: %d", code)
+	}
+	post("/doc/"+second+"/persons", url.Values{"new_code": {"имп"}, "new_name": {"Иванова Мария Петровна"}, "new_label": {"Тётя"}, "new_birth": {"01.02.1960"}})
+	ps, _ := c.Persons(ctx)
+	if len(ps) != 2 || ps[1].Code != "ИМП" || ps[1].BirthDate != "1960-02-01" {
+		t.Errorf("persons: %+v", ps)
+	}
+	for _, doc := range []string{second, first} {
+		if codes, _ := c.DocPersons(ctx, doc); strings.Join(codes, ",") != "ИМП" {
+			t.Errorf("%s persons: %v", doc, codes)
+		}
+	}
+}
+
+func mustSHA(t *testing.T, c *catalog.Catalog, doc string) string {
+	t.Helper()
+	d, _, err := c.GetDocument(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d.SHA256
+}
