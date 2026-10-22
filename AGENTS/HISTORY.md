@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Persons and date edited on the document page
+- What: «изменить» under «Дата» and «Чей» on the document page: ticked persons become the owner's links, the rest are ruled out (none ticked = nobody's, the inbox stops asking); the date in Russian forms, «нет даты», «вернуть дату библиотеки»; inbox person and date reasons link to the open form.
+- Why: owner wants to settle the remaining inbox reasons without the CLI or an assistant.
+- Files: internal/web/{edit,inbox,web}.go, internal/web/templates/{doc,parts}.html
+- Next: a flagged summary and characteristics from the page.
+
 ## 2026-10-22 · Checks settled from the inbox
 - What: buttons in «Входящие» and on the document page confirm a disputed split (whole file) or a doubted page, accept or revert an assistant's refinements; catalog migration 19 (`split.confirmed`, `pages.confirmed`, cleared by a new split or reading); «Открыть файл» moved next to each file name.
 - Why: owner wants to close checks in one place instead of the CLI; the file button belongs to the file it opens.

@@ -119,6 +119,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /doc/{id}", s.authed(s.document))
 	mux.HandleFunc("GET /doc/{id}/file", s.authed(s.original))
 	mux.HandleFunc("POST /doc/{id}/settle", s.authed(s.settle))
+	mux.HandleFunc("POST /doc/{id}/persons", s.authed(s.editPersons))
+	mux.HandleFunc("POST /doc/{id}/date", s.authed(s.editDate))
 	mux.HandleFunc("GET /inbox", s.authed(s.inbox))
 	mux.HandleFunc("GET /upload", s.authed(s.uploadForm))
 	mux.HandleFunc("POST /upload", s.authed(s.upload))
@@ -452,10 +454,25 @@ type docPage struct {
 	Pages                                int
 	FirstPage                            int      // in the original, when it is not the first
 	FileLinks                            []string // per file: the original, a PDF at the document's page
+	Choices                              []personChoice
+	ChoicesMade                          bool   // persons were ruled out by hand: no person is a decision
+	DateInput                            string // the date as the owner types it
+	ManualDate                           bool   // the owner or an assistant gave the date
+	NoDate                               bool   // ...and said there is none
+}
+
+// docForm is what an edit form on the document page leaves: which form is
+// open, its error and what was typed.
+type docForm struct {
+	Edit, Error, Date, Reason string
 }
 
 func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
-	ctx, id := r.Context(), r.PathValue("id")
+	s.showDocument(w, r, v, r.PathValue("id"), docForm{Edit: r.URL.Query().Get("edit")})
+}
+
+func (s *Server) showDocument(w http.ResponseWriter, r *http.Request, v viewer, id string, f docForm) {
+	ctx := r.Context()
 	d, tx, err := v.Cat.GetDocument(ctx, id)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -486,6 +503,24 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
 	}
 	for _, c := range codes {
 		p.Persons = append(p.Persons, personLabel(c, labels))
+	}
+	if p.Choices, err = personChoices(ctx, v.Cat, id, persons); err != nil {
+		s.fail(w, err)
+		return
+	}
+	if p.ChoicesMade, err = nobodysByChoice(ctx, v.Cat, id); err != nil {
+		s.fail(w, err)
+		return
+	}
+	manual, _, ok, err := v.Cat.ManualDate(ctx, id)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	p.ManualDate, p.NoDate = ok, ok && manual == ""
+	p.DateInput = typedDate(p.Date, p.Partial)
+	if f.Date != "" {
+		p.DateInput = f.Date
 	}
 	if p.Attrs, err = v.Cat.DocAttrSources(ctx, id); err != nil {
 		s.fail(w, err)
@@ -534,7 +569,10 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
 			p.Verbatim = append(p.Verbatim, pg)
 		}
 	}
-	s.render(w, "doc", map[string]any{"V": v, "D": p})
+	if f.Error != "" {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	s.render(w, "doc", map[string]any{"V": v, "D": p, "F": f})
 }
 
 // --- helpers -----------------------------------------------------------------

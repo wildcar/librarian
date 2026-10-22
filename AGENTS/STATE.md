@@ -12,7 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
-- Document page opens the original («Открыть файл» next to each file, PDF at the document's page, served only while the hash matches); «Входящие» lists documents without a person and every open check, by kind; splits, doubted pages and assistant edits are settled there by buttons (catalog migration 19). Owner checked the first part live 2026-10-22; the buttons deployed 2026-10-22.
+- Document page opens the original («Открыть файл» next to each file, PDF at the document's page, served only while the hash matches); «Входящие» lists documents without a person and every open check, by kind; splits, doubted pages and assistant edits are settled there by buttons (catalog migration 19). Persons and date are edited on the document page, linked from person and date reasons. Owner checked the first part live 2026-10-22; the buttons deployed 2026-10-22.
 - Server folders through the web (`/folder`): only inside the account's allowed roots; none set yet for `sergey`, and `librarian` may only traverse `/mnt/raid/document/Сережа`.
 - Uploads through the web (`/upload`, ADR-0007): files become a labelled batch, the worker in `serve` takes them to search (auto up to $1 OCR estimate, else «Обработать» on `/batches`); `librarian run` does the same from the CLI. Checked live on a throwaway account.
 - Assistants connect to `https://lib.wildcar.ru/mcp` by OAuth (ADR-0007): the letter names the assistant, «Ассистенты» lists and disconnects them, edits are signed with the assistant's name; checked live up to the authorization page, a real assistant not connected yet.
@@ -46,7 +46,7 @@ an MCP server from any AI assistant.
 - Characteristics read from documents by a model (kind of document, specialty, organisation kind), `source = model`, same table as batch characteristics.
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
 - `add_document` over MCP.
-- Inbox: set a person, a date, accept a flagged summary from «Входящие»; `list_inbox` over MCP.
+- Inbox: accept a flagged summary; characteristics from the page; a new person from the document page; `list_inbox` over MCP.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.
 

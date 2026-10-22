@@ -63,6 +63,10 @@ ul.docs .d{color:var(--muted);font-variant-numeric:tabular-nums;min-width:96px}
 .chip{display:inline-block;background:var(--chip);border-radius:6px;padding:0 6px;font-size:13px;margin-right:4px}
 .review{background:var(--warnbg);color:var(--warn);border-radius:8px;padding:8px 12px;margin:12px 0}
 .review ul{margin:4px 0 0;padding-left:20px}
+details.edit{margin:4px 0 0}
+details.edit>summary{color:var(--accent);font-size:14px;padding:0}
+details.edit form{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:6px;display:block}
+details.edit p{margin:6px 0;font-size:14px}
 .fix{display:inline-flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-left:6px}
 .fix form{display:inline-flex;gap:6px;margin:0}
 .review li,ul.why li{padding:2px 0}
@@ -100,7 +104,7 @@ pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}
 </fieldset>
 {{end}}
 
-{{define "fix"}}{{.Text}}{{if .Fix}} <span class="fix">{{if .PageLink}}<a href="{{.PageLink}}" target="_blank" rel="noopener">сверить с файлом</a> {{end}}<form method="post" action="/doc/{{.DocID}}/settle"><input type="hidden" name="fix" value="{{.Fix}}"><input type="hidden" name="page" value="{{.Page}}"><input type="hidden" name="back" value="{{.Back}}">
+{{define "fix"}}{{.Text}}{{if .EditLink}} <span class="fix"><a class="button small" href="{{.EditLink}}">Указать</a></span>{{end}}{{if .Fix}} <span class="fix">{{if .PageLink}}<a href="{{.PageLink}}" target="_blank" rel="noopener">сверить с файлом</a> {{end}}<form method="post" action="/doc/{{.DocID}}/settle"><input type="hidden" name="fix" value="{{.Fix}}"><input type="hidden" name="page" value="{{.Page}}"><input type="hidden" name="back" value="{{.Back}}">
 {{if eq .Fix "split"}}<button class="small" title="Подтвердит разбивку всего файла, из которого вырезан документ">Границы верны</button>
 {{else if eq .Fix "page"}}<button class="small">Прочитано верно</button>
 {{else}}<button class="small">Принять</button> <button class="small ghost" name="revert" value="1">Отменить</button>{{end}}</form></span>{{end}}{{end}}

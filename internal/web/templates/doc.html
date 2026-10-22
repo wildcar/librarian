@@ -5,8 +5,24 @@
 <h1>{{.D.Title}}</h1>
 {{if .D.Review}}<div class="review">Не проверено:<ul>{{range .D.Review}}<li>{{template "fix" .}}</li>{{end}}</ul>{{if .D.Assisted}}<div>правка: {{.D.Assisted}}</div>{{end}}</div>{{end}}
 <dl class="facts">
-<dt>Дата</dt><dd>{{date .D.Date .D.Partial}}{{if .D.DateSource}} <span class="muted">— {{since .D.DateSource}}</span>{{end}}</dd>
-<dt>Чей</dt><dd>{{range $i, $p := .D.Persons}}{{if $i}}, {{end}}{{$p}}{{else}}<span class="muted">не известно</span>{{end}}</dd>
+<dt>Дата</dt><dd>{{date .D.Date .D.Partial}}{{if .D.DateSource}} <span class="muted">— {{since .D.DateSource}}</span>{{end}}
+<details class="edit" id="date"{{if eq .F.Edit "date"}} open{{end}}><summary>изменить</summary>
+<form method="post" action="/doc/{{.D.ID}}/date">
+{{if and .F.Error (eq .F.Edit "date")}}<p class="err">{{.F.Error}}</p>{{end}}
+<div class="row"><input type="text" name="date" value="{{.D.DateInput}}" placeholder="ДД.ММ.ГГГГ" aria-label="дата" style="max-width:160px"><button>Сохранить</button></div>
+<p class="muted">Дата создания документа: когда его написали, выдали или подписали. Можно без дня (ММ.ГГГГ), только год или ДД.ММ, если год неизвестен.</p>
+<input type="text" name="reason" value="{{.F.Reason}}" placeholder="почему (необязательно)">
+<div class="row" style="margin-top:8px"><button class="small ghost" name="none" value="1">У документа нет даты</button>{{if .D.ManualDate}}<button class="small ghost" name="clear" value="1">Вернуть дату библиотеки</button>{{end}}</div>
+</form></details></dd>
+<dt>Чей</dt><dd>{{range $i, $p := .D.Persons}}{{if $i}}, {{end}}{{$p}}{{else}}<span class="muted">{{if .D.ChoicesMade}}ни к кому не относится{{else}}не известно{{end}}</span>{{end}}
+<details class="edit" id="person"{{if eq .F.Edit "person"}} open{{end}}><summary>изменить</summary>
+<form method="post" action="/doc/{{.D.ID}}/persons">
+{{if and .F.Error (eq .F.Edit "person")}}<p class="err">{{.F.Error}}</p>{{end}}
+{{range .D.Choices}}<label class="check"><input type="checkbox" name="person" value="{{.Code}}"{{if .Checked}} checked{{end}}> {{.Label}} ({{.Code}}){{if .Assistant}} <span class="muted">· ассистент</span>{{end}}</label>{{else}}<p class="muted">В библиотеке ещё нет людей: их добавляют при загрузке.</p>{{end}}
+<p class="muted">Отмеченные станут вашими привязками, неотмеченных библиотека больше не привяжет к этому документу. Ни одного не отметить значит, что документ ничей.</p>
+<input type="text" name="reason" value="{{.F.Reason}}" placeholder="почему (необязательно)">
+<div class="row" style="margin-top:8px"><button>Сохранить</button></div>
+</form></details></dd>
 {{if .D.Attrs}}<dt>Характеристики</dt><dd>{{range .D.Attrs}}<span class="chip" title="{{attrsrc .Source}}">{{.Key}}: {{.Value}}{{if eq .Source "model"}} <span class="muted">·&nbsp;по тексту</span>{{else if eq .Source "model:guess"}} <span class="muted">·&nbsp;догадка</span>{{else if eq .Source "assistant"}} <span class="muted">·&nbsp;ассистент</span>{{end}}</span>{{end}}</dd>{{end}}
 <dt>{{if gt (len .D.Files) 1}}Файлы{{else}}Файл{{end}}</dt><dd>{{range $i, $f := .D.Files}}<div>{{if .Uploaded}}{{if .Name}}{{.Name}}{{else}}<span class="muted">без имени</span>{{end}} <span class="muted">— загружен через форму</span>{{else}}{{.Name}} <span class="muted">— {{.Path}}{{if .Missing}}, больше нет на месте{{end}}</span>{{end}}{{if not .Missing}} <a class="button small" href="{{index $.D.FileLinks $i}}" target="_blank" rel="noopener">Открыть файл</a>{{end}}</div>{{end}}{{if .D.FirstPage}}<div class="muted">файл откроется на странице {{.D.FirstPage}}, где начинается документ</div>{{end}}</dd>
 <dt>Страниц</dt><dd>{{.D.Pages}}</dd>

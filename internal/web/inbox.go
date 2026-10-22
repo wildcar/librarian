@@ -47,7 +47,14 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request, v viewer) {
 			return
 		}
 		if len(d.Persons) == 0 {
-			reasons = append([]catalog.ReviewItem{{Text: noPerson}}, reasons...)
+			decided, err := nobodysByChoice(ctx, v.Cat, d.ID)
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			if !decided {
+				reasons = append([]catalog.ReviewItem{{Text: noPerson}}, reasons...)
+			}
 		}
 		if len(reasons) == 0 {
 			continue
@@ -115,6 +122,7 @@ type reviewRow struct {
 	DocID    string
 	Back     string // where the buttons return
 	PageLink string // for a doubted page: the original at that page
+	EditLink string // for a person or date reason: the form on the document page
 }
 
 func reviewRows(ctx context.Context, cat *catalog.Catalog, docID string, items []catalog.ReviewItem) ([]reviewRow, error) {
@@ -123,6 +131,12 @@ func reviewRows(ctx context.Context, cat *catalog.Catalog, docID string, items [
 	ctype := ""
 	for i, it := range items {
 		out[i] = reviewRow{ReviewItem: it, DocID: docID, Back: "/doc/" + docID}
+		switch reasonKind(it.Text) {
+		case "человек":
+			out[i].EditLink = "/doc/" + docID + "?edit=person#person"
+		case "дата":
+			out[i].EditLink = "/doc/" + docID + "?edit=date#date"
+		}
 		if it.Fix != catalog.FixPage {
 			continue
 		}

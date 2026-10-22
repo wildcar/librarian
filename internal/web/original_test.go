@@ -182,3 +182,65 @@ func TestOriginalAndInbox(t *testing.T) {
 		t.Errorf("changed file: %d", code)
 	}
 }
+
+func TestEditFromPage(t *testing.T) {
+	home := t.TempDir()
+	makeAccount(t, home, "acc", "Пациент: Евтушенко Борис Васильевич. ЭКГ")
+	_, second := scanned(t, home, "acc")
+	first := strings.TrimSuffix(second, "-2") + "-1"
+	box := &outbox{}
+	ts, reg := service(t, home, box)
+	reg.SetEmail(context.Background(), "owner@example.org", "acc", time.Now())
+	b := newBrowser(t, ts.URL)
+	b.do("POST", "/login", url.Values{"email": {"owner@example.org"}})
+	link := regexp.MustCompile(`/login/confirm\?t=([\w-]+)`).FindStringSubmatch(box.last())
+	b.do("POST", "/login/confirm", url.Values{"t": {link[1]}}, "Origin", ts.URL)
+	post := func(path string, form url.Values) (int, string, string) {
+		return b.do("POST", path, form, "Origin", ts.URL)
+	}
+
+	// The inbox leads to the open form.
+	if _, _, page := b.do("GET", "/inbox", nil); !strings.Contains(page, `href="/doc/`+second+`?edit=person#person"`) {
+		t.Errorf("no person link in the inbox: %s", page)
+	}
+	if _, _, page := b.do("GET", "/doc/"+second+"?edit=person", nil); !strings.Contains(page, `id="person" open`) {
+		t.Errorf("person form closed: %s", page)
+	}
+
+	// Persons: one ticked; nobody for the other document; a stranger refused.
+	if code, loc, _ := post("/doc/"+second+"/persons", url.Values{"person": {"ЕБВ"}, "reason": {"папин"}}); code != http.StatusSeeOther || loc != "/doc/"+second {
+		t.Fatalf("persons: %d %q", code, loc)
+	}
+	if _, _, page := b.do("GET", "/doc/"+second, nil); !strings.Contains(page, "<dd>Папа (ЕБВ)") {
+		t.Errorf("person not shown: %s", page)
+	}
+	post("/doc/"+first+"/persons", url.Values{})
+	if _, _, page := b.do("GET", "/doc/"+first, nil); !strings.Contains(page, "ни к кому не относится") {
+		t.Errorf("nobody's document: %s", page)
+	}
+	if _, _, page := b.do("GET", "/inbox", nil); strings.Contains(page, "человек: не указан") {
+		t.Errorf("decided persons still in the inbox: %s", page)
+	}
+	if code, _, page := post("/doc/"+second+"/persons", url.Values{"person": {"XXX"}}); code != http.StatusBadRequest || !strings.Contains(page, "Такого человека нет") {
+		t.Errorf("stranger: %d", code)
+	}
+
+	// Date: a wrong one keeps what was typed; a right one is the owner's;
+	// none; back to the library's.
+	code, _, page := post("/doc/"+second+"/date", url.Values{"date": {"31.02.2022"}})
+	if code != http.StatusBadRequest || !strings.Contains(page, "Такой даты нет") || !strings.Contains(page, `value="31.02.2022"`) || !strings.Contains(page, `id="date" open`) {
+		t.Errorf("wrong date: %d %s", code, page)
+	}
+	post("/doc/"+second+"/date", url.Values{"date": {"12.09.2021"}})
+	if _, _, page := b.do("GET", "/doc/"+second, nil); !strings.Contains(page, "12.09.2021") || !strings.Contains(page, "уточнена владельцем") {
+		t.Errorf("date not set: %s", page)
+	}
+	post("/doc/"+second+"/date", url.Values{"date": {"12.09.2021"}, "none": {"1"}})
+	if _, _, page := b.do("GET", "/doc/"+second, nil); !strings.Contains(page, "без даты") || strings.Contains(page, "12.09.2021") || !strings.Contains(page, "Вернуть дату") {
+		t.Errorf("no date: %s", page)
+	}
+	post("/doc/"+second+"/date", url.Values{"clear": {"1"}})
+	if _, _, page := b.do("GET", "/doc/"+second, nil); strings.Contains(page, "уточнена владельцем") || strings.Contains(page, "Вернуть дату") {
+		t.Errorf("date not given back: %s", page)
+	}
+}
