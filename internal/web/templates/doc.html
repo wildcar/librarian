@@ -3,13 +3,12 @@
 <p><a href="/">← Документы</a></p>
 <div class="card">
 <h1>{{.D.Title}}</h1>
-{{if .D.Files}}<p class="row"><a class="button" href="/doc/{{.D.ID}}/file{{.D.Anchor}}" target="_blank" rel="noopener">Открыть файл</a>{{if .D.FirstPage}} <span class="muted">откроется на странице {{.D.FirstPage}}</span>{{end}}</p>{{end}}
-{{if .D.Review}}<div class="review">Не проверено:<ul>{{range .D.Review}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+{{if .D.Review}}<div class="review">Не проверено:<ul>{{range .D.Review}}<li>{{template "fix" .}}</li>{{end}}</ul>{{if .D.Assisted}}<div>правка: {{.D.Assisted}}</div>{{end}}</div>{{end}}
 <dl class="facts">
 <dt>Дата</dt><dd>{{date .D.Date .D.Partial}}{{if .D.DateSource}} <span class="muted">— {{since .D.DateSource}}</span>{{end}}</dd>
 <dt>Чей</dt><dd>{{range $i, $p := .D.Persons}}{{if $i}}, {{end}}{{$p}}{{else}}<span class="muted">не известно</span>{{end}}</dd>
-{{if .D.Attrs}}<dt>Характеристики</dt><dd>{{range .D.Attrs}}<span class="chip" title="{{attrsrc .Source}}">{{.Key}}: {{.Value}}{{if eq .Source "model"}} <span class="muted">·&nbsp;по тексту</span>{{else if eq .Source "model:guess"}} <span class="muted">·&nbsp;догадка</span>{{end}}</span>{{end}}</dd>{{end}}
-<dt>{{if gt (len .D.Files) 1}}Файлы{{else}}Файл{{end}}</dt><dd>{{range .D.Files}}<div>{{if .Uploaded}}{{if .Name}}{{.Name}}{{else}}<span class="muted">без имени</span>{{end}} <span class="muted">— загружен через форму</span>{{else}}{{.Name}} <span class="muted">— {{.Path}}{{if .Missing}}, больше нет на месте{{end}}</span>{{end}}</div>{{end}}</dd>
+{{if .D.Attrs}}<dt>Характеристики</dt><dd>{{range .D.Attrs}}<span class="chip" title="{{attrsrc .Source}}">{{.Key}}: {{.Value}}{{if eq .Source "model"}} <span class="muted">·&nbsp;по тексту</span>{{else if eq .Source "model:guess"}} <span class="muted">·&nbsp;догадка</span>{{else if eq .Source "assistant"}} <span class="muted">·&nbsp;ассистент</span>{{end}}</span>{{end}}</dd>{{end}}
+<dt>{{if gt (len .D.Files) 1}}Файлы{{else}}Файл{{end}}</dt><dd>{{range $i, $f := .D.Files}}<div>{{if .Uploaded}}{{if .Name}}{{.Name}}{{else}}<span class="muted">без имени</span>{{end}} <span class="muted">— загружен через форму</span>{{else}}{{.Name}} <span class="muted">— {{.Path}}{{if .Missing}}, больше нет на месте{{end}}</span>{{end}}{{if not .Missing}} <a class="button small" href="{{index $.D.FileLinks $i}}" target="_blank" rel="noopener">Открыть файл</a>{{end}}</div>{{end}}{{if .D.FirstPage}}<div class="muted">файл откроется на странице {{.D.FirstPage}}, где начинается документ</div>{{end}}</dd>
 <dt>Страниц</dt><dd>{{.D.Pages}}</dd>
 {{if .D.Batches}}<dt>Пачки</dt><dd>{{range $i, $b := .D.Batches}}{{if $i}}, {{end}}№{{$b}}{{end}}</dd>{{end}}
 <dt>Id</dt><dd class="muted">{{.D.ID}}</dd>

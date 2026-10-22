@@ -101,12 +101,24 @@ func (c *Catalog) SaveSplit(ctx context.Context, r SplitResult, at time.Time) er
 		ON CONFLICT(sha256) DO UPDATE SET status = excluded.status, method = excluded.method,
 		  engine = excluded.engine, cost_usd = split.cost_usd + excluded.cost_usd,
 		  disagreements = excluded.disagreements, error = excluded.error,
-		  pipeline = excluded.pipeline, updated = excluded.updated`,
+		  pipeline = excluded.pipeline, updated = excluded.updated, confirmed = NULL`,
 		r.SHA256, r.Status, r.Method, r.Engine, r.CostUSD, r.Disagreements, r.Error, r.Pipeline, ts)
 	if err != nil {
 		return fmt.Errorf("save split %s: %w", r.SHA256[:12], err)
 	}
 	return tx.Commit()
+}
+
+// ConfirmSplit records that the owner checked the disputed boundaries of
+// the original a document was cut from: they hold for all its documents.
+func (c *Catalog) ConfirmSplit(ctx context.Context, docID string, at time.Time) error {
+	_, err := c.db.ExecContext(ctx, `UPDATE split SET confirmed = ?
+		WHERE status = 'review' AND sha256 = (SELECT sha256 FROM documents WHERE id = ?)`,
+		at.UTC().Format(time.RFC3339Nano), docID)
+	if err != nil {
+		return fmt.Errorf("confirm split of %s: %w", docID, err)
+	}
+	return nil
 }
 
 // DocumentRow is a document with its source and first line, for listings.
@@ -171,7 +183,8 @@ func firstLine(t string) string {
 // SplitSummary counts originals per split status and lists those to review.
 func (c *Catalog) SplitSummary(ctx context.Context) (map[string]int, int, []string, error) {
 	byStatus := map[string]int{}
-	rows, err := c.db.QueryContext(ctx, "SELECT status, COUNT(*) FROM split GROUP BY status")
+	rows, err := c.db.QueryContext(ctx, `SELECT CASE WHEN confirmed IS NULL THEN status ELSE 'done' END s, COUNT(*)
+		FROM split GROUP BY s`)
 	if err != nil {
 		return nil, 0, nil, fmt.Errorf("split summary: %w", err)
 	}
@@ -190,7 +203,7 @@ func (c *Catalog) SplitSummary(ctx context.Context) (map[string]int, int, []stri
 		return nil, 0, nil, fmt.Errorf("split summary: %w", err)
 	}
 	rows, err = c.db.QueryContext(ctx,
-		"SELECT sha256, COALESCE(disagreements, ''), COALESCE(error, '') FROM split WHERE status IN ('review', 'error') ORDER BY sha256")
+		"SELECT sha256, COALESCE(disagreements, ''), COALESCE(error, '') FROM split WHERE status IN ('review', 'error') AND confirmed IS NULL ORDER BY sha256")
 	if err != nil {
 		return nil, 0, nil, fmt.Errorf("split summary: %w", err)
 	}

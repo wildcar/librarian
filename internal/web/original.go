@@ -38,6 +38,14 @@ func (s *Server) original(w http.ResponseWriter, r *http.Request, v viewer) {
 		s.fail(w, err)
 		return
 	}
+	// ?n= asks for one of the files the original was found as.
+	if n, err := strconv.Atoi(r.URL.Query().Get("n")); err == nil {
+		if n < 0 || n >= len(files) {
+			files = nil
+		} else {
+			files = files[n : n+1]
+		}
+	}
 	for _, f := range files {
 		fh, err := openOriginal(f.File, d.SHA256)
 		if err != nil {

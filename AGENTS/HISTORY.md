@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Checks settled from the inbox
+- What: buttons in «Входящие» and on the document page confirm a disputed split (whole file) or a doubted page, accept or revert an assistant's refinements; catalog migration 19 (`split.confirmed`, `pages.confirmed`, cleared by a new split or reading); «Открыть файл» moved next to each file name.
+- Why: owner wants to close checks in one place instead of the CLI; the file button belongs to the file it opens.
+- Files: internal/web/{inbox,original,web}.go, internal/web/templates/{doc,inbox,parts}.html, internal/catalog/{persons,pages,documents,catalog}.go
+- Next: person, date and summary fixes from the inbox.
+
 ## 2026-10-22 · The original on the document page; the inbox
 - What: «Открыть файл» serves the original at `/doc/<id>/file` (PDF opens at the document's page; served only while the file hashes to the original; unsafe types only download); «Входящие» (`/inbox`) lists documents without a person and every `review` reason, with counts and a filter by kind.
 - Why: owner wants to check a document against its source in one click and see everything waiting for a check on one page instead of per document and in `stats`.

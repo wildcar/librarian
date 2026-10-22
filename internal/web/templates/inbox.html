@@ -1,11 +1,11 @@
 {{template "head" "Входящие"}}{{template "bar" .V}}
 <main>
 <h1>Входящие <span class="count">{{.Total}}</span></h1>
-{{if .Total}}<p class="muted">Документы, в которых библиотека в чём-то не уверена. Откройте документ, сверьте с файлом и поправьте, если нужно.</p>
+{{if .Total}}<p class="muted">Документы, в которых библиотека в чём-то не уверена. Проверьте и подтвердите кнопкой рядом с замечанием. Остальное правится на странице документа.</p>
 <p class="row"><a href="/inbox"{{if not .Kind}} class="chip"{{end}}>все {{.Total}}</a>{{range .Kinds}}<a href="/inbox?kind={{.Name}}"{{if eq .Name $.Kind}} class="chip"{{end}}>{{.Name}} {{.Count}}</a>{{end}}</p>
 <ul class="docs inbox">
 {{range .Docs}}<li><span class="d">{{date .Date .Partial}}</span><span><a href="/doc/{{.ID}}">{{if .Title}}{{.Title}}{{else}}{{title .Summary}}{{end}}</a>
-<ul class="why">{{range .Reasons}}<li>{{.}}</li>{{end}}</ul></span></li>
+<ul class="why">{{range .Reasons}}<li>{{template "fix" .}}</li>{{end}}</ul>{{if .Assisted}}<div class="muted">правка: {{.Assisted}}</div>{{end}}</span></li>
 {{end}}</ul>
 {{else}}<p class="ok">Всё проверено: замечаний нет.</p>{{end}}
 </main>

@@ -391,11 +391,38 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 // The reasons name the kind of problem only, never the text that caused it,
 // because a leak check's hit is the very personal data it caught.
 func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error) {
-	var out []string
+	items, err := c.DocReviewItems(ctx, docID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = it.Text
+	}
+	return out, nil
+}
+
+// What the owner can settle about a review item without editing the document.
+const (
+	FixSplit     = "split"     // the boundaries hold
+	FixPage      = "page"      // the page was read right
+	FixAssistant = "assistant" // accept or revert the assistant's refinements
+)
+
+// ReviewItem is one open check of a document.
+type ReviewItem struct {
+	Text string
+	Fix  string // FixSplit, FixPage, FixAssistant; "" when settled by editing the document
+	Page int    // for FixPage: the page, counted from the document's first
+}
+
+// DocReviewItems is DocReview with what the owner can do about each item.
+func (c *Catalog) DocReviewItems(ctx context.Context, docID string) ([]ReviewItem, error) {
+	var out []ReviewItem
 	rows, err := c.db.QueryContext(ctx, `
 		SELECT p.page - d.first_page + 1 FROM documents d
 		JOIN pages p ON p.sha256 = d.sha256 AND p.page BETWEEN d.first_page AND d.last_page
-		WHERE d.id = ? AND p.flagged = 1 ORDER BY p.page`, docID)
+		WHERE d.id = ? AND p.flagged = 1 AND p.confirmed IS NULL ORDER BY p.page`, docID)
 	if err != nil {
 		return nil, fmt.Errorf("review %s: %w", docID, err)
 	}
@@ -405,7 +432,7 @@ func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error)
 			rows.Close()
 			return nil, fmt.Errorf("review %s: %w", docID, err)
 		}
-		out = append(out, fmt.Sprintf("распознавание: страница %d прочитана с сомнениями", n))
+		out = append(out, ReviewItem{Text: fmt.Sprintf("распознавание: страница %d прочитана с сомнениями", n), Fix: FixPage, Page: n})
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -414,7 +441,7 @@ func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error)
 
 	var split, status, flags sql.NullString
 	err = c.db.QueryRowContext(ctx, `
-		SELECT s.status, t.status, t.flags FROM documents d
+		SELECT CASE WHEN s.confirmed IS NULL THEN s.status END, t.status, t.flags FROM documents d
 		LEFT JOIN split s ON s.sha256 = d.sha256
 		LEFT JOIN texts t ON t.doc_id = d.id
 		WHERE d.id = ?`, docID).Scan(&split, &status, &flags)
@@ -422,7 +449,7 @@ func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error)
 		return nil, fmt.Errorf("review %s: %w", docID, err)
 	}
 	if split.String == SplitReview {
-		out = append(out, "разбивка: границы документа не подтверждены")
+		out = append(out, ReviewItem{Text: "разбивка: границы документа не подтверждены", Fix: FixSplit})
 	}
 	// A rejected model date matters only while the owner has not dated the document.
 	var dateStatus sql.NullString
@@ -438,17 +465,17 @@ func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error)
 		return nil, fmt.Errorf("review %s: %w", docID, err)
 	}
 	if stray > 0 {
-		out = append(out, "человек: в тексте найден не тот человек, что указан у пачки")
+		out = append(out, ReviewItem{Text: "человек: в тексте найден не тот человек, что указан у пачки"})
 	}
 	assisted, err := c.HasAssistantChanges(ctx, docID)
 	if err != nil {
 		return nil, fmt.Errorf("review %s: %w", docID, err)
 	}
 	if assisted {
-		out = append(out, "правка ассистента: владелец ещё не подтвердил")
+		out = append(out, ReviewItem{Text: "правка ассистента: владелец ещё не подтвердил", Fix: FixAssistant})
 	}
 	if dateStatus.String == DateRejected {
-		out = append(out, "дата: названная моделью дата не подтвердилась текстом")
+		out = append(out, ReviewItem{Text: "дата: названная моделью дата не подтвердилась текстом"})
 	}
 	if status.String == TextsFlagged {
 		seen := map[string]bool{}
@@ -456,7 +483,7 @@ func (c *Catalog) DocReview(ctx context.Context, docID string) ([]string, error)
 			r := summaryReason(f)
 			if !seen[r] {
 				seen[r] = true
-				out = append(out, r)
+				out = append(out, ReviewItem{Text: r})
 			}
 		}
 	}

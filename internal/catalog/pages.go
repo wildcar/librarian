@@ -102,7 +102,7 @@ func (c *Catalog) SavePage(ctx context.Context, p Page, at time.Time) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(sha256, page) DO UPDATE SET method = excluded.method, engine = excluded.engine,
 		  text = excluded.text, cost_usd = excluded.cost_usd, pipeline = excluded.pipeline,
-		  created = excluded.created`,
+		  created = excluded.created, confirmed = NULL`,
 		p.SHA256, p.Page, p.Method, p.Engine, p.Text, p.CostUSD, p.Pipeline, at.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return fmt.Errorf("save page %s/%d: %w", p.SHA256[:12], p.Page, err)
@@ -234,10 +234,23 @@ type PageCheck struct {
 func (c *Catalog) SaveCheck(ctx context.Context, sha string, page int, k PageCheck) error {
 	_, err := c.db.ExecContext(ctx, `
 		UPDATE pages SET check_engine = ?, check_text = ?, check_words = ?, check_matched = ?,
-		  check_missing = ?, check_run = ?, flagged = ? WHERE sha256 = ? AND page = ?`,
+		  check_missing = ?, check_run = ?, flagged = ?, confirmed = NULL WHERE sha256 = ? AND page = ?`,
 		k.Engine, k.Text, k.Words, k.Matched, strings.Join(k.Missing, " "), k.Run, boolInt(k.Flagged), sha, page)
 	if err != nil {
 		return fmt.Errorf("save check %s/%d: %w", sha[:12], page, err)
+	}
+	return nil
+}
+
+// ConfirmPage records that the owner checked a doubted page of a document
+// against the original; page counts from the document's first page.
+func (c *Catalog) ConfirmPage(ctx context.Context, docID string, page int, at time.Time) error {
+	_, err := c.db.ExecContext(ctx, `UPDATE pages SET confirmed = ?
+		WHERE flagged = 1 AND (sha256, page) = (SELECT sha256, first_page + ? - 1 FROM documents
+		  WHERE id = ? AND ? >= 1 AND first_page + ? - 1 <= last_page)`,
+		at.UTC().Format(time.RFC3339Nano), page, docID, page, page)
+	if err != nil {
+		return fmt.Errorf("confirm page %d of %s: %w", page, docID, err)
 	}
 	return nil
 }
@@ -319,7 +332,7 @@ type Flagged struct {
 func (c *Catalog) FlaggedPages(ctx context.Context) ([]Flagged, error) {
 	rows, err := c.db.QueryContext(ctx, `
 		SELECT sha256, page, check_words, check_matched, COALESCE(check_run, 0), COALESCE(check_missing, '')
-		FROM pages WHERE flagged = 1 ORDER BY sha256, page`)
+		FROM pages WHERE flagged = 1 AND confirmed IS NULL ORDER BY sha256, page`)
 	if err != nil {
 		return nil, fmt.Errorf("flagged pages: %w", err)
 	}

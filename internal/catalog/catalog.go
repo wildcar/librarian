@@ -241,6 +241,10 @@ var schema = []string{
 	// 18: standard names for diagnostic specialties; a guess stays out of the
 	// title. Every document is described again.
 	`UPDATE texts SET title = NULL;`,
+	// 19: the owner confirmed a disputed split or a doubted page reading;
+	// a new split or reading clears it.
+	`ALTER TABLE split ADD COLUMN confirmed TEXT;
+	ALTER TABLE pages ADD COLUMN confirmed TEXT;`,
 }
 
 // Catalog is an open account catalog.

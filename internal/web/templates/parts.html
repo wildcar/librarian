@@ -44,6 +44,8 @@ input[type=email],select{font:inherit;padding:8px 10px;border:1px solid var(--li
 input[type=email]{width:100%}
 button{font:inherit;padding:8px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--card);cursor:pointer}
 a.button{display:inline-block;padding:6px 14px;border-radius:8px;border:1px solid var(--accent);text-decoration:none}
+a.button.small,button.small{padding:1px 10px;font-size:14px;border-radius:6px}
+button.small.ghost{border-color:var(--line)}
 button.link{background:none;border:none;color:var(--accent);padding:0;text-decoration:underline}
 .muted{color:var(--muted)}
 .err{color:#b3261e}
@@ -61,6 +63,9 @@ ul.docs .d{color:var(--muted);font-variant-numeric:tabular-nums;min-width:96px}
 .chip{display:inline-block;background:var(--chip);border-radius:6px;padding:0 6px;font-size:13px;margin-right:4px}
 .review{background:var(--warnbg);color:var(--warn);border-radius:8px;padding:8px 12px;margin:12px 0}
 .review ul{margin:4px 0 0;padding-left:20px}
+.fix{display:inline-flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-left:6px}
+.fix form{display:inline-flex;gap:6px;margin:0}
+.review li,ul.why li{padding:2px 0}
 dl.facts{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:0}
 dl.facts dt{color:var(--muted)}
 dl.facts dd{margin:0}
@@ -94,6 +99,11 @@ pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}
 <input type="text" name="label" value="{{.L.Label}}" placeholder="название пачки (необязательно)" style="margin-top:8px">
 </fieldset>
 {{end}}
+
+{{define "fix"}}{{.Text}}{{if .Fix}} <span class="fix">{{if .PageLink}}<a href="{{.PageLink}}" target="_blank" rel="noopener">сверить с файлом</a> {{end}}<form method="post" action="/doc/{{.DocID}}/settle"><input type="hidden" name="fix" value="{{.Fix}}"><input type="hidden" name="page" value="{{.Page}}"><input type="hidden" name="back" value="{{.Back}}">
+{{if eq .Fix "split"}}<button class="small" title="Подтвердит разбивку всего файла, из которого вырезан документ">Границы верны</button>
+{{else if eq .Fix "page"}}<button class="small">Прочитано верно</button>
+{{else}}<button class="small">Принять</button> <button class="small ghost" name="revert" value="1">Отменить</button>{{end}}</form></span>{{end}}{{end}}
 
 {{define "foot"}}</body>
 </html>

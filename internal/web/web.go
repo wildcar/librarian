@@ -118,6 +118,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("GET /doc/{id}", s.authed(s.document))
 	mux.HandleFunc("GET /doc/{id}/file", s.authed(s.original))
+	mux.HandleFunc("POST /doc/{id}/settle", s.authed(s.settle))
 	mux.HandleFunc("GET /inbox", s.authed(s.inbox))
 	mux.HandleFunc("GET /upload", s.authed(s.uploadForm))
 	mux.HandleFunc("POST /upload", s.authed(s.upload))
@@ -443,13 +444,14 @@ type docPage struct {
 	Persons                              []string
 	Attrs                                []catalog.SourcedAttr
 	Batches                              []int64
-	Review                               []string
+	Review                               []reviewRow
+	Assisted                             string
 	Summary, Essential                   string
 	Verbatim                             []catalog.Page
 	Files                                []catalog.SourceFile
 	Pages                                int
-	FirstPage                            int    // in the original, when it is not the first
-	Anchor                               string // where the original opens: "#page=N" for a PDF
+	FirstPage                            int      // in the original, when it is not the first
+	FileLinks                            []string // per file: the original, a PDF at the document's page
 }
 
 func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
@@ -493,7 +495,16 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
 		s.fail(w, err)
 		return
 	}
-	if p.Review, err = v.Cat.DocReview(ctx, id); err != nil {
+	items, err := v.Cat.DocReviewItems(ctx, id)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if p.Review, err = reviewRows(ctx, v.Cat, id, items); err != nil {
+		s.fail(w, err)
+		return
+	}
+	if p.Assisted, err = assisted(ctx, v.Cat, id, items); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -506,8 +517,12 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
 		s.fail(w, err)
 		return
 	}
-	if p.Anchor = fileAnchor(ctype, d.FirstPage); p.Anchor != "" {
+	anchor := fileAnchor(ctype, d.FirstPage)
+	if anchor != "" {
 		p.FirstPage = d.FirstPage
+	}
+	for i := range p.Files {
+		p.FileLinks = append(p.FileLinks, fmt.Sprintf("/doc/%s/file?n=%d%s", id, i, anchor))
 	}
 	pages, err := v.Cat.Pages(ctx, d.SHA256)
 	if err != nil {
