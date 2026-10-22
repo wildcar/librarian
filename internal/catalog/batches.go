@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"path"
-	"slices"
 	"strings"
 	"time"
 )
@@ -315,8 +314,8 @@ type BatchProgress struct {
 	Split       int // cut into documents
 	Documents   int
 	Ready       int // documents with text layers: in search
-	// Kinds of the files not read, by extension (".xlsx", ".md").
-	UnsupportedKinds []string
+	// The files not read, by name.
+	UnsupportedFiles []string
 }
 
 // Started says whether any work on the batch is done yet.
@@ -377,25 +376,35 @@ func (c *Catalog) BatchProgresses(ctx context.Context) (map[int64]BatchProgress,
 		return nil, err
 	}
 	kinds, err := c.db.QueryContext(ctx, `
-		SELECT DISTINCT bo.batch_id, s.uri FROM batch_originals bo
+		SELECT bo.batch_id, s.sha256, s.uri, s.name, s.missing FROM batch_originals bo
 		JOIN extraction e ON e.sha256 = bo.sha256 AND e.status = 'unsupported'
-		JOIN sources s ON s.sha256 = bo.sha256`)
+		JOIN sources s ON s.sha256 = bo.sha256
+		ORDER BY bo.batch_id, s.first_seen, s.uri`)
 	if err != nil {
 		return nil, fmt.Errorf("batch progress: %w", err)
 	}
 	defer kinds.Close()
+	seen := map[[2]string]bool{}
 	for kinds.Next() {
 		var id int64
-		var uri string
-		if err := kinds.Scan(&id, &uri); err != nil {
+		var sha, uri string
+		var name sql.NullString
+		var missing bool
+		if err := kinds.Scan(&id, &sha, &uri, &name, &missing); err != nil {
 			return nil, fmt.Errorf("batch progress: %w", err)
 		}
-		p := out[id]
-		if k := strings.ToLower(path.Ext(uri)); k != "" && !slices.Contains(p.UnsupportedKinds, k) {
-			p.UnsupportedKinds = append(p.UnsupportedKinds, k)
-			slices.Sort(p.UnsupportedKinds)
-			out[id] = p
+		k := [2]string{fmt.Sprint(id), sha}
+		if seen[k] {
+			continue // one name per original
 		}
+		seen[k] = true
+		f := sourceFile(sha, uri, name, missing)
+		if f.Name == "" {
+			f.Name = "файл без имени" + path.Ext(uri)
+		}
+		p := out[id]
+		p.UnsupportedFiles = append(p.UnsupportedFiles, f.Name)
+		out[id] = p
 	}
 	return out, kinds.Err()
 }

@@ -218,6 +218,12 @@ var schema = []string{
 	// 12: which assistant made a refinement (ADR-0007): the OAuth client's
 	// name and host, or the account token.
 	`ALTER TABLE doc_changes ADD COLUMN actor TEXT NOT NULL DEFAULT '';`,
+	// 13: plain text files are read now: those set aside as unsupported go
+	// back to extraction. An uploaded file keeps the name it was sent with;
+	// a folder file's name is its path's.
+	`DELETE FROM extraction WHERE status = 'unsupported'
+		AND sha256 IN (SELECT sha256 FROM originals WHERE mime = 'text/plain');
+	ALTER TABLE sources ADD COLUMN name TEXT;`,
 }
 
 // Catalog is an open account catalog.
@@ -304,6 +310,7 @@ type Seen struct {
 	MTime   time.Time
 	MIME    string // by content
 	ExtMIME string // by file extension, may be empty
+	Name    string // the name an uploaded file was sent with; "" for a folder file
 	At      time.Time
 }
 
@@ -324,12 +331,12 @@ func (c *Catalog) RecordSeen(ctx context.Context, s Seen) (newOriginal bool, err
 	}
 	n, _ := res.RowsAffected()
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO sources (uri, sha256, size, mtime, ext_mime, first_seen, last_seen, missing)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+		`INSERT INTO sources (uri, sha256, size, mtime, ext_mime, first_seen, last_seen, missing, name)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULLIF(?, ''))
 		 ON CONFLICT(uri) DO UPDATE SET sha256 = excluded.sha256, size = excluded.size,
 		   mtime = excluded.mtime, ext_mime = excluded.ext_mime,
-		   last_seen = excluded.last_seen, missing = 0`,
-		s.URI, s.SHA256, s.Size, s.MTime.UTC().Format(time.RFC3339Nano), s.ExtMIME, at, at)
+		   last_seen = excluded.last_seen, missing = 0, name = COALESCE(excluded.name, name)`,
+		s.URI, s.SHA256, s.Size, s.MTime.UTC().Format(time.RFC3339Nano), s.ExtMIME, at, at, s.Name)
 	if err != nil {
 		return false, fmt.Errorf("record source %s: %w", s.URI, err)
 	}

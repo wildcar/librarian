@@ -137,20 +137,21 @@ func TestTextLayerAndOCR(t *testing.T) {
 		"digital.pdf": makePDF(latin),
 		"scan.pdf":    makePDF("", ""),
 		"photo.png":   png.Bytes(),
-		"notes.txt":   []byte("plain text is a later slice"),
+		"notes.txt":   []byte("Plain text is read as it is."),
+		"archive.zip": append([]byte("PK\x03\x04"), make([]byte, 40)...),
 	})
 
 	dry := e.run(t, true)
-	if e.ocr.calls != 0 || dry.PagesOCR != 3 || dry.PagesTextLayer != 1 {
-		t.Fatalf("dry run: calls=%d ocr=%d text=%d, want 0 3 1", e.ocr.calls, dry.PagesOCR, dry.PagesTextLayer)
+	if e.ocr.calls != 0 || dry.PagesOCR != 3 || dry.PagesTextLayer != 2 {
+		t.Fatalf("dry run: calls=%d ocr=%d text=%d, want 0 3 2", e.ocr.calls, dry.PagesOCR, dry.PagesTextLayer)
 	}
 
 	rep := e.run(t, false)
-	if rep.Done != 3 || rep.Unsupported != 1 || rep.Failed != 0 {
+	if rep.Done != 4 || rep.Unsupported != 1 || rep.Failed != 0 {
 		t.Fatalf("run: done=%d unsupported=%d failed=%d errors=%v", rep.Done, rep.Unsupported, rep.Failed, rep.Errors)
 	}
-	if rep.PagesTextLayer != 1 || rep.PagesOCR != 3 || e.ocr.calls != 3 {
-		t.Errorf("pages: text=%d ocr=%d calls=%d, want 1 3 3", rep.PagesTextLayer, rep.PagesOCR, e.ocr.calls)
+	if rep.PagesTextLayer != 2 || rep.PagesOCR != 3 || e.ocr.calls != 3 {
+		t.Errorf("pages: text=%d ocr=%d calls=%d, want 2 3 3", rep.PagesTextLayer, rep.PagesOCR, e.ocr.calls)
 	}
 	if rep.CostUSD < 0.0299 || rep.CostUSD > 0.0301 {
 		t.Errorf("cost = %v, want 0.03", rep.CostUSD)
@@ -167,7 +168,13 @@ func TestTextLayerAndOCR(t *testing.T) {
 		t.Errorf("scan.pdf pages = %+v", ps)
 	}
 
-	// Nothing is left: a second run calls no model and the text file is not retried.
+	sha, _ = intake.HashFile(filepath.Join(e.src, "notes.txt"))
+	ps, _ = e.cat.Pages(context.Background(), sha)
+	if len(ps) != 1 || ps[0].Engine != "file" || ps[0].Text != "Plain text is read as it is." {
+		t.Errorf("notes.txt pages = %+v", ps)
+	}
+
+	// Nothing is left: a second run calls no model and the archive is not retried.
 	again := e.run(t, false)
 	if again.Originals != 0 || e.ocr.calls != 3 {
 		t.Errorf("second run: originals=%d calls=%d, want 0 3", again.Originals, e.ocr.calls)

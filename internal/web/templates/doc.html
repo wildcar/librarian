@@ -8,6 +8,7 @@
 <dt>Дата</dt><dd>{{date .D.Date .D.Partial}}{{if .D.DateSource}} <span class="muted">— {{since .D.DateSource}}</span>{{end}}</dd>
 <dt>Чей</dt><dd>{{range $i, $p := .D.Persons}}{{if $i}}, {{end}}{{$p}}{{else}}<span class="muted">не известно</span>{{end}}</dd>
 {{if .D.Attrs}}<dt>Характеристики</dt><dd>{{range .D.Attrs}}<span class="chip">{{.Key}}: {{.Value}}</span>{{end}}</dd>{{end}}
+<dt>{{if gt (len .D.Files) 1}}Файлы{{else}}Файл{{end}}</dt><dd>{{range .D.Files}}<div>{{if .Uploaded}}{{if .Name}}{{.Name}}{{else}}<span class="muted">без имени</span>{{end}} <span class="muted">— загружен через форму</span>{{else}}{{.Name}} <span class="muted">— {{.Path}}{{if .Missing}}, больше нет на месте{{end}}</span>{{end}}</div>{{end}}</dd>
 <dt>Страниц</dt><dd>{{.D.Pages}}</dd>
 {{if .D.Batches}}<dt>Пачки</dt><dd>{{range $i, $b := .D.Batches}}{{if $i}}, {{end}}№{{$b}}{{end}}</dd>{{end}}
 <dt>Id</dt><dd class="muted">{{.D.ID}}</dd>

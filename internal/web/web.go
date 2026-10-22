@@ -429,6 +429,7 @@ type docPage struct {
 	Review                               []string
 	Summary, Essential                   string
 	Verbatim                             []catalog.Page
+	Files                                []catalog.SourceFile
 	Pages                                int
 }
 
@@ -471,6 +472,10 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
 		return
 	}
 	if p.Review, err = v.Cat.DocReview(ctx, id); err != nil {
+		s.fail(w, err)
+		return
+	}
+	if p.Files, err = v.Cat.SourceFiles(ctx, d.SHA256); err != nil {
 		s.fail(w, err)
 		return
 	}

@@ -2,7 +2,9 @@ package catalog
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"path"
 	"strings"
 	"time"
 )
@@ -351,6 +353,47 @@ func (c *Catalog) CheckShares(ctx context.Context) ([][4]any, error) {
 			return nil, fmt.Errorf("check shares: %w", err)
 		}
 		out = append(out, [4]any{sha, page, words, matched})
+	}
+	return out, rows.Err()
+}
+
+// SourceFile is one file an original was found as.
+type SourceFile struct {
+	Name     string // what the owner calls it: the uploaded name or the file's own
+	Path     string // where it lies on the server, for a folder file
+	Uploaded bool
+	Missing  bool // gone from its folder since
+}
+
+// sourceFile names a source: an upload is kept under its hash, so its name
+// is the one it was sent with (unknown for uploads made before names were
+// kept); a folder file is its path.
+func sourceFile(sha, uri string, name sql.NullString, missing bool) SourceFile {
+	p := strings.TrimPrefix(uri, "file://")
+	base := path.Base(p)
+	if strings.TrimSuffix(base, path.Ext(base)) == sha {
+		return SourceFile{Name: name.String, Uploaded: true, Missing: missing}
+	}
+	return SourceFile{Name: base, Path: p, Missing: missing}
+}
+
+// SourceFiles lists the files an original was found as, oldest first.
+func (c *Catalog) SourceFiles(ctx context.Context, sha string) ([]SourceFile, error) {
+	rows, err := c.db.QueryContext(ctx,
+		`SELECT uri, name, missing FROM sources WHERE sha256 = ? ORDER BY first_seen, uri`, sha)
+	if err != nil {
+		return nil, fmt.Errorf("source files: %w", err)
+	}
+	defer rows.Close()
+	var out []SourceFile
+	for rows.Next() {
+		var uri string
+		var name sql.NullString
+		var missing bool
+		if err := rows.Scan(&uri, &name, &missing); err != nil {
+			return nil, fmt.Errorf("source files: %w", err)
+		}
+		out = append(out, sourceFile(sha, uri, name, missing))
 	}
 	return out, rows.Err()
 }

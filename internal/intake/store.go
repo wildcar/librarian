@@ -75,7 +75,7 @@ func Store(ctx context.Context, cat *catalog.Catalog, root, name string, r io.Re
 		return Stored{}, err
 	}
 	isNew, err := cat.RecordSeen(ctx, catalog.Seen{URI: URI(final), SHA256: sha, Size: n, MTime: st.ModTime(),
-		MIME: mime, ExtMIME: ExtMIME(name), At: time.Now()})
+		MIME: mime, ExtMIME: ExtMIME(name), Name: name, At: time.Now()})
 	if err != nil {
 		return Stored{}, err
 	}

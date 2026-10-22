@@ -3,6 +3,8 @@ package web_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -105,6 +107,10 @@ func TestUpload(t *testing.T) {
 	if len(bs) != 1 || bs[0].Kind != "upload" || bs[0].Label != "билеты" || bs[0].Originals != 2 ||
 		strings.Join(bs[0].Persons, ",") != "ЕБВ,ЕСБ" || len(bs[0].Attrs) != 1 {
 		t.Errorf("batch: %+v", bs)
+	}
+	sum := sha256.Sum256([]byte("# note"))
+	if fs, err := c.SourceFiles(ctx, hex.EncodeToString(sum[:])); err != nil || len(fs) != 1 || fs[0].Name != "заметка.md" || !fs[0].Uploaded {
+		t.Errorf("uploaded name: %+v, %v", fs, err)
 	}
 	ps, _ := c.Persons(ctx)
 	if len(ps) != 2 || ps[1].Code != "ЕСБ" || ps[1].Label != "Я" {

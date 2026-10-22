@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Plain text files are read; uploads keep their name
+- What: `text/plain` originals (.txt, .md, .csv) become pages as they are (UTF-8 or Windows-1251, ~3500-character pages at paragraph breaks); catalog migration 13 puts unsupported text files back to extraction and adds `sources.name`; the document page lists its files, «Пачки» names the files not read.
+- Why: owner's notes (ChatGPT answers as .md) were left out of search; uploaded files were known only by hash.
+- Files: internal/pages/text.go, internal/extract/extract.go, internal/catalog/{catalog,pages,batches}.go, internal/intake/store.go, internal/web/templates/{doc,batches}.html
+- Next: DOCX/XLSX; archives.
+
 ## 2026-10-22 · Second reading at a fixed size; clearer batch progress
 - What: the tesseract check renders the long side at 3508 px instead of 300 dpi; «Пачки» shows a percent over reading, splitting and search, «готово / в работе / в очереди», and the kinds of files not read.
 - Why: scans whose PDF page claims ~60×85 cm became 70-MP images, ten minutes per page, and the run looked hung; a ✓ beside an empty bar confused the owner.

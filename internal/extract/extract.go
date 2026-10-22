@@ -277,6 +277,9 @@ func readable(p catalog.Pending) (string, error) {
 // one handles a single original and returns its extraction status.
 func (s *Stage) one(ctx context.Context, o Options, p catalog.Pending, rep *Report) (status string, pageCount int, errText string) {
 	isPDF := p.MIME == "application/pdf"
+	if pages.TextTypes[p.MIME] {
+		return s.text(ctx, o, p, rep)
+	}
 	if !isPDF && !pages.ImageTypes[p.MIME] {
 		return catalog.ExtractUnsupported, 0, "type " + p.MIME + " is not handled yet"
 	}
@@ -447,4 +450,29 @@ func (s *Stage) one(ctx context.Context, o Options, p catalog.Pending, rep *Repo
 		return catalog.ExtractError, pageCount, firstErr
 	}
 	return catalog.ExtractDone, pageCount, ""
+}
+
+// text stores a plain text file as pages: the file is the text, so there is
+// nothing to recognise and nothing to pay.
+func (s *Stage) text(ctx context.Context, o Options, p catalog.Pending, rep *Report) (status string, pageCount int, errText string) {
+	path, err := readable(p)
+	if err != nil {
+		return catalog.ExtractError, 0, err.Error()
+	}
+	texts, err := pages.ReadText(path)
+	if err != nil {
+		return catalog.ExtractUnsupported, 0, err.Error()
+	}
+	if o.DryRun {
+		rep.PagesTextLayer += len(texts)
+		return catalog.ExtractDone, len(texts), ""
+	}
+	for i, t := range texts {
+		pg := catalog.Page{SHA256: p.SHA256, Page: i + 1, Pipeline: Pipeline, Method: "text-layer", Engine: "file", Text: t}
+		if err := s.Catalog.SavePage(ctx, pg, s.Now()); err != nil {
+			return catalog.ExtractError, len(texts), err.Error()
+		}
+		rep.PagesTextLayer++
+	}
+	return catalog.ExtractDone, len(texts), ""
 }

@@ -21,7 +21,7 @@
 <td style="min-width:180px">{{with .P}}<div class="bar"><span style="width:{{.Percent}}%"></span></div>
 {{if .Done}}<span class="ok">✓ готово</span>{{else if $.Running}}в работе, {{.Percent}}%{{else if .Started}}обработано {{.Percent}}%, остальное — при следующем запуске{{else}}в очереди{{end}}<br>
 <span class="muted">файлов {{.Originals}}: прочитано {{.Read}}{{if .Failed}}, <span class="err">ошибок {{.Failed}}</span>{{end}}; документов {{.Documents}}, в поиске {{.Ready}}</span>
-{{if .Unsupported}}<br><span class="muted">не читаются {{.Unsupported}} ({{range $i, $k := .UnsupportedKinds}}{{if $i}}, {{end}}{{$k}}{{end}}): такие файлы библиотека пока не умеет читать, они сохранены, но в поиск не попали</span>{{end}}{{end}}</td></tr>
+{{if .Unsupported}}<details class="muted"><summary>не читаются {{.Unsupported}}: такие файлы библиотека пока не умеет читать, в поиск они не попали</summary>{{range .UnsupportedFiles}}{{.}}<br>{{end}}</details>{{end}}{{end}}</td></tr>
 {{end}}</table>{{else}}<p>Пачек пока нет. <a href="/upload">Загрузить документы</a></p>{{end}}
 </main>
 {{template "foot"}}

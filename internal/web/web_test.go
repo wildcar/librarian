@@ -227,7 +227,7 @@ func TestLoginTreeAndIsolation(t *testing.T) {
 		}
 	}
 	code, _, page := desk.do("GET", "/doc/"+ours, nil)
-	if code != 200 || !strings.Contains(page, "Суть: Пациент") || !strings.Contains(page, "02.04.2022") {
+	if code != 200 || !strings.Contains(page, "Суть: Пациент") || !strings.Contains(page, "02.04.2022") || !strings.Contains(page, "— /in/") {
 		t.Errorf("document %d: %s", code, page)
 	}
 	if code, _, _ := desk.do("GET", "/doc/"+theirs, nil); code != http.StatusNotFound {
