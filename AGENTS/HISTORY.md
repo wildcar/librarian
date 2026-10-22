@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · The original on the document page; the inbox
+- What: «Открыть файл» serves the original at `/doc/<id>/file` (PDF opens at the document's page; served only while the file hashes to the original; unsafe types only download); «Входящие» (`/inbox`) lists documents without a person and every `review` reason, with counts and a filter by kind.
+- Why: owner wants to check a document against its source in one click and see everything waiting for a check on one page instead of per document and in `stats`.
+- Files: internal/web/{original,inbox}.go, internal/web/templates/{doc,inbox,parts}.html, internal/catalog/pages.go
+- Next: act on inbox items in place (confirm split, page, assistant edit).
+
 ## 2026-10-22 · Kind, specialty and organisation read from the text
 - What: `titling` became `describe`: one call per document returns the title and `вид`, `специальность`, `организация` (catalog migration 15, `texts.model_attrs`, every document described again); `index` gives them as `source = model` below manual, assistant and batch; the tree can group by them; lists hide model chips, the document page marks them.
 - Why: owner wants to find and group documents by kind and specialty, not only by person and year.

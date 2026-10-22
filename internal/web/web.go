@@ -117,6 +117,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /login/confirm", s.confirm)
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("GET /doc/{id}", s.authed(s.document))
+	mux.HandleFunc("GET /doc/{id}/file", s.authed(s.original))
+	mux.HandleFunc("GET /inbox", s.authed(s.inbox))
 	mux.HandleFunc("GET /upload", s.authed(s.uploadForm))
 	mux.HandleFunc("POST /upload", s.authed(s.upload))
 	mux.HandleFunc("GET /folder", s.authed(s.folder))
@@ -446,6 +448,8 @@ type docPage struct {
 	Verbatim                             []catalog.Page
 	Files                                []catalog.SourceFile
 	Pages                                int
+	FirstPage                            int    // in the original, when it is not the first
+	Anchor                               string // where the original opens: "#page=N" for a PDF
 }
 
 func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
@@ -496,6 +500,14 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
 	if p.Files, err = v.Cat.SourceFiles(ctx, d.SHA256); err != nil {
 		s.fail(w, err)
 		return
+	}
+	ctype, err := v.Cat.OriginalMIME(ctx, d.SHA256)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if p.Anchor = fileAnchor(ctype, d.FirstPage); p.Anchor != "" {
+		p.FirstPage = d.FirstPage
 	}
 	pages, err := v.Cat.Pages(ctx, d.SHA256)
 	if err != nil {

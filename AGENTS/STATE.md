@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- Document page opens the original («Открыть файл», PDF at the document's page, served only while the hash matches); «Входящие» lists documents without a person and every open check, by kind. Tested, not yet deployed to `homesrv`.
 - Server folders through the web (`/folder`): only inside the account's allowed roots; none set yet for `sergey`, and `librarian` may only traverse `/mnt/raid/document/Сережа`.
 - Uploads through the web (`/upload`, ADR-0007): files become a labelled batch, the worker in `serve` takes them to search (auto up to $1 OCR estimate, else «Обработать» on `/batches`); `librarian run` does the same from the CLI. Checked live on a throwaway account.
 - Assistants connect to `https://lib.wildcar.ru/mcp` by OAuth (ADR-0007): the letter names the assistant, «Ассистенты» lists and disconnects them, edits are signed with the assistant's name; checked live up to the authorization page, a real assistant not connected yet.
@@ -41,11 +42,11 @@ an MCP server from any AI assistant.
 ## Next
 
 - Mail: SPF, DKIM, DMARC and A `mail.wildcar.ru` published, Port25 check passes SPF and DKIM (2026-10-22); login e-mail wildcar@mail.ru bound to `sergey`, mail.ru accepts letters; Gmail accepts through the router's VPN exit 38.135.53.21 (PTR out.wildcar.ru); others get mail from 95.165.109.250 without PTR.
-- Uploads from cloud links (ADR-0007); the original on the document page.
+- Uploads from cloud links (ADR-0007).
 - Characteristics read from documents by a model (kind of document, specialty, organisation kind), `source = model`, same table as batch characteristics.
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
 - `add_document` over MCP.
-- Inbox for the owner: unlinked documents, flagged summaries, split reviews.
+- Inbox actions: confirm a split, a page reading, an assistant's edit right from «Входящие»; `list_inbox` over MCP.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.
 
@@ -60,9 +61,7 @@ an MCP server from any AI assistant.
 
 - Search ranking: bm25 favours short texts that mention a word; tune on real questions.
 - Date sanity: device clocks (an ECG dated 1970), dates before the person's birth.
-- Flagged summaries and split reviews wait for the inbox.
-- Split review files have no inbox yet; `stats` lists them.
-- Flagged pages are listed by `stats`; they go to the inbox once the inbox exists.
+- Flagged pages of originals not yet split into documents are only in `stats`, not in «Входящие».
 - `extract` processes originals one after another, pages in parallel; parallelism across originals if volume needs it.
 - Go tests and linter beyond `go vet` / `gofmt`: no Go logic yet. `tools/ocrbench` has no tests (throwaway harness).
 - Router provider `codex-oauth` disabled; GPT models via codex subscription not benchmarked.

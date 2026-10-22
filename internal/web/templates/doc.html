@@ -3,6 +3,7 @@
 <p><a href="/">← Документы</a></p>
 <div class="card">
 <h1>{{.D.Title}}</h1>
+{{if .D.Files}}<p class="row"><a class="button" href="/doc/{{.D.ID}}/file{{.D.Anchor}}" target="_blank" rel="noopener">Открыть файл</a>{{if .D.FirstPage}} <span class="muted">откроется на странице {{.D.FirstPage}}</span>{{end}}</p>{{end}}
 {{if .D.Review}}<div class="review">Не проверено:<ul>{{range .D.Review}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
 <dl class="facts">
 <dt>Дата</dt><dd>{{date .D.Date .D.Partial}}{{if .D.DateSource}} <span class="muted">— {{since .D.DateSource}}</span>{{end}}</dd>

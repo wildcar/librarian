@@ -361,6 +361,7 @@ func (c *Catalog) CheckShares(ctx context.Context) ([][4]any, error) {
 type SourceFile struct {
 	Name     string // what the owner calls it: the uploaded name or the file's own
 	Path     string // where it lies on the server, for a folder file
+	File     string // the file on the server, folder file or upload
 	Uploaded bool
 	Missing  bool // gone from its folder since
 }
@@ -372,9 +373,18 @@ func sourceFile(sha, uri string, name sql.NullString, missing bool) SourceFile {
 	p := strings.TrimPrefix(uri, "file://")
 	base := path.Base(p)
 	if strings.TrimSuffix(base, path.Ext(base)) == sha {
-		return SourceFile{Name: name.String, Uploaded: true, Missing: missing}
+		return SourceFile{Name: name.String, File: p, Uploaded: true, Missing: missing}
 	}
-	return SourceFile{Name: base, Path: p, Missing: missing}
+	return SourceFile{Name: base, Path: p, File: p, Missing: missing}
+}
+
+// OriginalMIME is the content type an original was recognised as.
+func (c *Catalog) OriginalMIME(ctx context.Context, sha string) (string, error) {
+	var m string
+	if err := c.db.QueryRowContext(ctx, "SELECT mime FROM originals WHERE sha256 = ?", sha).Scan(&m); err != nil {
+		return "", fmt.Errorf("original %s: %w", sha, err)
+	}
+	return m, nil
 }
 
 // SourceFiles lists the files an original was found as, oldest first.
