@@ -243,12 +243,13 @@ func (c *Catalog) BatchesOf(ctx context.Context, sha string) ([]Inherited, error
 }
 
 // ClearDerived removes what index derives for a document — rule and batch
-// links, batch characteristics — before it is redone. Manual ones stay.
+// links, batch and model characteristics — before it is redone. Manual ones
+// stay.
 func (c *Catalog) ClearDerived(ctx context.Context, docID string) error {
 	if _, err := c.db.ExecContext(ctx, "DELETE FROM doc_persons WHERE doc_id = ? AND method IN ('rule', 'batch')", docID); err != nil {
 		return err
 	}
-	_, err := c.db.ExecContext(ctx, "DELETE FROM doc_attrs WHERE doc_id = ? AND source LIKE 'batch:%'", docID)
+	_, err := c.db.ExecContext(ctx, "DELETE FROM doc_attrs WHERE doc_id = ? AND (source LIKE 'batch:%' OR source = 'model')", docID)
 	return err
 }
 

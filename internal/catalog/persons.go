@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -108,18 +109,32 @@ func (c *Catalog) DocPersons(ctx context.Context, docID string) ([]string, error
 
 // IndexEntry is what the index step needs about one document.
 type IndexEntry struct {
-	DocID     string
-	SHA256    string
-	FirstPage int
-	LastPage  int
-	Summary   string
-	Essential string
+	DocID      string
+	SHA256     string
+	FirstPage  int
+	LastPage   int
+	Summary    string
+	Essential  string
+	ModelAttrs []Attr // read by the model from the summary
+}
+
+func (e *IndexEntry) setModelAttrs(js string) {
+	var m map[string][]string
+	if json.Unmarshal([]byte(js), &m) != nil {
+		return
+	}
+	for k, vs := range m {
+		for _, v := range vs {
+			e.ModelAttrs = append(e.ModelAttrs, Attr{Key: k, Value: v})
+		}
+	}
+	sort.Slice(e.ModelAttrs, func(i, j int) bool { return e.ModelAttrs[i].String() < e.ModelAttrs[j].String() })
 }
 
 // IndexEntries lists every document that has text layers.
 func (c *Catalog) IndexEntries(ctx context.Context) ([]IndexEntry, error) {
 	rows, err := c.db.QueryContext(ctx, `
-		SELECT d.id, d.sha256, d.first_page, d.last_page, COALESCE(t.summary, ''), COALESCE(t.essential, '')
+		SELECT d.id, d.sha256, d.first_page, d.last_page, COALESCE(t.summary, ''), COALESCE(t.essential, ''), COALESCE(t.model_attrs, '')
 		FROM documents d JOIN texts t ON t.doc_id = d.id WHERE t.status IN ('done', 'flagged')
 		ORDER BY d.id`)
 	if err != nil {
@@ -129,9 +144,11 @@ func (c *Catalog) IndexEntries(ctx context.Context) ([]IndexEntry, error) {
 	var out []IndexEntry
 	for rows.Next() {
 		var e IndexEntry
-		if err := rows.Scan(&e.DocID, &e.SHA256, &e.FirstPage, &e.LastPage, &e.Summary, &e.Essential); err != nil {
+		var js string
+		if err := rows.Scan(&e.DocID, &e.SHA256, &e.FirstPage, &e.LastPage, &e.Summary, &e.Essential, &js); err != nil {
 			return nil, fmt.Errorf("index entries: %w", err)
 		}
+		e.setModelAttrs(js)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -140,13 +157,15 @@ func (c *Catalog) IndexEntries(ctx context.Context) ([]IndexEntry, error) {
 // IndexEntryOf returns the index entry of one document with text layers.
 func (c *Catalog) IndexEntryOf(ctx context.Context, docID string) (IndexEntry, error) {
 	var e IndexEntry
+	var js string
 	err := c.db.QueryRowContext(ctx, `
-		SELECT d.id, d.sha256, d.first_page, d.last_page, COALESCE(t.summary, ''), COALESCE(t.essential, '')
+		SELECT d.id, d.sha256, d.first_page, d.last_page, COALESCE(t.summary, ''), COALESCE(t.essential, ''), COALESCE(t.model_attrs, '')
 		FROM documents d JOIN texts t ON t.doc_id = d.id WHERE d.id = ? AND t.status IN ('done', 'flagged')`, docID).
-		Scan(&e.DocID, &e.SHA256, &e.FirstPage, &e.LastPage, &e.Summary, &e.Essential)
+		Scan(&e.DocID, &e.SHA256, &e.FirstPage, &e.LastPage, &e.Summary, &e.Essential, &js)
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, fmt.Errorf("%w: %s", ErrNoDocument, docID)
 	}
+	e.setModelAttrs(js)
 	return e, err
 }
 

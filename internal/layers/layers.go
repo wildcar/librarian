@@ -95,19 +95,8 @@ func (s *Stage) Run(ctx context.Context, o Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The account's persons are forbidden in every summary, whatever the
-	// document itself spells out.
-	persons, err := s.Catalog.Persons(ctx)
-	if err != nil {
+	if s.extra, err = AccountForbidden(ctx, s.Catalog); err != nil {
 		return nil, err
-	}
-	s.extra = nil
-	for _, p := range persons {
-		s.extra = append(s.extra, p.FullName)
-		s.extra = append(s.extra, p.Aliases...)
-		if t, err := time.Parse("2006-01-02", p.BirthDate); err == nil {
-			s.extra = append(s.extra, t.Format("02.01.2006"))
-		}
 	}
 	rep := &Report{Documents: len(docs)}
 	var (
@@ -302,4 +291,23 @@ func removedLines(lines []string, drop map[int]string, kept []string) []removed 
 		out = append(out, removed{Line: i + 1, Category: drop[i+1], Text: l})
 	}
 	return out
+}
+
+// AccountForbidden lists what no de-identified text may contain whatever the
+// document itself spells out: the account's persons, their aliases and
+// birth dates.
+func AccountForbidden(ctx context.Context, c *catalog.Catalog) ([]string, error) {
+	persons, err := c.Persons(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, p := range persons {
+		out = append(out, p.FullName)
+		out = append(out, p.Aliases...)
+		if t, err := time.Parse("2006-01-02", p.BirthDate); err == nil {
+			out = append(out, t.Format("02.01.2006"))
+		}
+	}
+	return out, nil
 }

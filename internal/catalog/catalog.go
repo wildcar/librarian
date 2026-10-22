@@ -176,7 +176,7 @@ var schema = []string{
 		doc_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
 		key    TEXT NOT NULL,
 		value  TEXT NOT NULL,
-		source TEXT NOT NULL,                -- batch:<id> | manual
+		source TEXT NOT NULL,                -- batch:<id> | manual | assistant | model
 		PRIMARY KEY (doc_id, key, value)
 	);
 	CREATE INDEX doc_attrs_key ON doc_attrs(key, value);
@@ -227,6 +227,13 @@ var schema = []string{
 	// 14: a short title made from the summary for lists; NULL until made,
 	// and again when the summary changes.
 	`ALTER TABLE texts ADD COLUMN title TEXT;`,
+	// 15: characteristics the model reads from the summary with the title
+	// (JSON key → values); every document is described again to get them.
+	`ALTER TABLE texts ADD COLUMN model_attrs TEXT;
+	UPDATE texts SET title = NULL;`,
+	// 16: the author's specialty is read from the essential text too, so
+	// every document is described again.
+	`UPDATE texts SET title = NULL;`,
 }
 
 // Catalog is an open account catalog.

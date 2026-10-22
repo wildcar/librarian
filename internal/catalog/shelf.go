@@ -15,6 +15,7 @@ type ShelfDoc struct {
 	Title   string // "" until made
 	Persons []string
 	Attrs   map[string][]string
+	Given   map[string][]string // of Attrs, those not read by the model: shown in lists
 }
 
 // Shelf lists every document with text layers, newest first, with its
@@ -64,18 +65,24 @@ func (c *Catalog) Shelf(ctx context.Context) ([]ShelfDoc, error) {
 		return nil, err
 	}
 
-	rows, err = c.db.QueryContext(ctx, `SELECT doc_id, key, value FROM doc_attrs GROUP BY doc_id, key, value ORDER BY doc_id, key, value`)
+	rows, err = c.db.QueryContext(ctx, `SELECT doc_id, key, value, source FROM doc_attrs ORDER BY doc_id, key, value`)
 	if err != nil {
 		return nil, fmt.Errorf("shelf attrs: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, k, v string
-		if err := rows.Scan(&id, &k, &v); err != nil {
+		var id, k, v, src string
+		if err := rows.Scan(&id, &k, &v, &src); err != nil {
 			return nil, err
 		}
 		if i, ok := at[id]; ok {
 			out[i].Attrs[k] = append(out[i].Attrs[k], v)
+			if src != SourceModel {
+				if out[i].Given == nil {
+					out[i].Given = map[string][]string{}
+				}
+				out[i].Given[k] = append(out[i].Given[k], v)
+			}
 		}
 	}
 	return out, rows.Err()

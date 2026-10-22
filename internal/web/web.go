@@ -76,7 +76,20 @@ func New(cfg Config) (*Server, error) {
 		"date":  shownDate,
 		"since": dateSourceLabel,
 		"stage": func(s string) string { return stageNames[s] },
-		"usd":   func(f float64) string { return fmt.Sprintf("$%.2f", f) },
+		"attrsrc": func(src string) string {
+			switch {
+			case src == "manual":
+				return "задано вами"
+			case src == "assistant":
+				return "правка ассистента, ждёт подтверждения"
+			case src == catalog.SourceModel:
+				return "модель прочитала из текста документа"
+			case strings.HasPrefix(src, "batch:"):
+				return "от пачки №" + strings.TrimPrefix(src, "batch:")
+			}
+			return src
+		},
+		"usd": func(f float64) string { return fmt.Sprintf("$%.2f", f) },
 		"since_min": func(t time.Time) string {
 			m := int(cfg.Now().Sub(t).Minutes())
 			if m < 1 {

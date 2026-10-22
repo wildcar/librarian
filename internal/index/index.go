@@ -122,6 +122,24 @@ func one(ctx context.Context, c *catalog.Catalog, persons []catalog.Person, e ca
 			}
 		}
 	}
+	// What the model read from the summary ranks last: a key the owner, an
+	// assistant or a batch already gave is left to them.
+	given, err := c.DocAttrSources(ctx, e.DocID)
+	if err != nil {
+		return err
+	}
+	taken := map[string]bool{}
+	for _, a := range given {
+		taken[a.Key] = true
+	}
+	for _, a := range e.ModelAttrs {
+		if taken[a.Key] || rejected.Rejects(a) {
+			continue
+		}
+		if err := c.SetDocAttr(ctx, e.DocID, a, catalog.SourceModel); err != nil {
+			return err
+		}
+	}
 	links, err := c.DocLinks(ctx, e.DocID) // manual links count too
 	if err != nil {
 		return err

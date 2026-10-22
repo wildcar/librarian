@@ -4,6 +4,13 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Kind, specialty and organisation read from the text
+- What: `titling` became `describe`: one call per document returns the title and `вид`, `специальность`, `организация` (catalog migration 15, `texts.model_attrs`, every document described again); `index` gives them as `source = model` below manual, assistant and batch; the tree can group by them; lists hide model chips, the document page marks them.
+- Why: owner wants to find and group documents by kind and specialty, not only by person and year.
+- Files: internal/describe/, internal/catalog/{titles,persons,shelf,batches}.go, internal/index/index.go, internal/web/, internal/mcpserver/server.go
+- Then: the summary rarely names the author, so the specialty was missing or guessed from referrals; `describe` also reads the essential text (migration 16 describes again) with the summary's leak checks on the title and values.
+- Next: the original file on the document page; the inbox.
+
 ## 2026-10-22 · Short document titles; shorter login texts
 - What: a `title` stage after the summary names each document in 2–6 words from the summary (catalog migration 14, `texts.title`, reset when the summary changes); the tree, the document page and MCP use it; login and «Проверьте почту» texts shortened; a year-less date showed as «16.--09».
 - Why: owner found list captions long and uneven («Это …», dates in three formats, «оформленные в частной клинике»).

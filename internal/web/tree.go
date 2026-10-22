@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/wildcar/librarian/internal/catalog"
-	"github.com/wildcar/librarian/internal/titling"
+	"github.com/wildcar/librarian/internal/describe"
 )
 
 // Levels of the virtual tree (ADR-0007): a person, a year, or any
@@ -114,18 +114,5 @@ func noneLabel(level string) string {
 	return "нет «" + level + "»"
 }
 
-// Title stands in for a document's title until the model has made one: the
-// first sentence of the summary, which names the document (ADR-0005),
-// without its leading «Это».
-func Title(summary string) string {
-	s := strings.TrimSpace(summary)
-	if rest, ok := strings.CutPrefix(s, "Это "); ok {
-		s = titling.Clean(rest)
-	}
-	for i := 0; i+1 < len(s); i++ {
-		if (s[i] == '.' || s[i] == '\n') && (s[i+1] == ' ' || s[i+1] == '\n') {
-			return s[:i]
-		}
-	}
-	return strings.TrimSuffix(s, ".")
-}
+// Title stands in for a document's title until the model has made one.
+func Title(summary string) string { return describe.FromSummary(summary) }
