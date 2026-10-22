@@ -73,7 +73,7 @@ func TestServerFolder(t *testing.T) {
 		t.Errorf("queued: %s", page)
 	}
 	worker.Pass(ctx)
-	if s := worker.Status("acc"); !strings.Contains(s.LastFolder, "пачка №1, файлов 2, новых 2") {
+	if s := worker.Status("acc"); !strings.Contains(s.LastIntake, "пачка №1, файлов 2, новых 2") {
 		t.Errorf("intake: %+v", s)
 	}
 	c, err := catalog.Open(a.CatalogPath())
@@ -88,7 +88,7 @@ func TestServerFolder(t *testing.T) {
 	// The same folder again without labels: nothing new, no batch.
 	b.do("POST", "/folder", url.Values{"path": {health}}, "Origin", ts.URL)
 	worker.Pass(ctx)
-	if s := worker.Status("acc"); !strings.Contains(s.LastFolder, "новых файлов нет") {
+	if s := worker.Status("acc"); !strings.Contains(s.LastIntake, "новых файлов нет") {
 		t.Errorf("again: %+v", s)
 	}
 }

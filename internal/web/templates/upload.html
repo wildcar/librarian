@@ -5,8 +5,13 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 <form method="post" action="/upload" enctype="multipart/form-data" id="up">
 {{template "labels" .}}
+<fieldset><legend>Ссылка на облако</legend>
+<input type="text" name="link" id="link" value="{{.L.Link}}" placeholder="https://disk.yandex.ru/d/…" inputmode="url">
+<p class="muted">Публичная ссылка на папку или файл Яндекс Диска, Nextcloud или Google Диска. Библиотека скачает все файлы, вложенные папки тоже, и сохранит у себя: ссылки со временем перестают работать. В облаке ничего не меняется. Повторная отправка той же ссылки добавит только новое.</p>
+</fieldset>
+<p class="muted">Или файлы с компьютера:</p>
 <label class="drop" id="drop">Перетащите файлы сюда или выберите их
-<input type="file" name="files" id="files" multiple required>
+<input type="file" name="files" id="files" multiple>
 <span id="picked"></span></label>
 <p class="muted">PDF и изображения распознаются; другие файлы сохранятся, но пока не читаются. До {{.MaxFileMB}} МБ на файл.</p>
 <p><button id="send">Загрузить</button> <span class="muted" id="prog"></span></p>
@@ -20,7 +25,10 @@
   ['dragenter','dragover'].forEach(function(e){drop.addEventListener(e,function(ev){ev.preventDefault();drop.classList.add('over')})});
   ['dragleave','drop'].forEach(function(e){drop.addEventListener(e,function(ev){ev.preventDefault();drop.classList.remove('over')})});
   drop.addEventListener('drop',function(ev){ if(ev.dataTransfer&&ev.dataTransfer.files.length){ input.files=ev.dataTransfer.files; show(); } });
-  document.getElementById('up').addEventListener('submit',function(){
+  document.getElementById('up').addEventListener('submit',function(ev){
+    var link=document.getElementById('link').value.trim();
+    if(!link && !input.files.length){ ev.preventDefault(); picked.textContent=' — выберите файлы или вставьте ссылку'; return; }
+    if(link) input.disabled=true;
     document.getElementById('send').disabled=true;
     document.getElementById('prog').textContent='Загружаем…';
   });

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/wildcar/librarian/internal/catalog"
+	"github.com/wildcar/librarian/internal/cloud"
 	"github.com/wildcar/librarian/internal/index"
 	"github.com/wildcar/librarian/internal/intake"
 	"github.com/wildcar/librarian/internal/pipeline"
@@ -26,6 +27,7 @@ type labels struct {
 	NewCode, NewName, NewLabel string
 	NewBirth                   string
 	AttrsText, Label           string
+	Link                       string // a public cloud link instead of files
 	attrs                      []catalog.Attr
 }
 
@@ -135,8 +137,15 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, v viewer) {
 				l.AttrsText = string(val)
 			case "label":
 				l.Label = strings.TrimSpace(string(val))
+			case "link":
+				l.Link = strings.TrimSpace(string(val))
 			}
 			continue
+		}
+		if l.Link != "" {
+			w.WriteHeader(http.StatusBadRequest)
+			s.renderUpload(w, r, v, l, "Либо файлы, либо ссылка: отправьте их по отдельности.")
+			return
 		}
 		// The form puts the labels before the files: check them before
 		// anything is kept.
@@ -155,6 +164,10 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, v viewer) {
 		}
 		files = append(files, uploaded{Name: st.Name, New: st.New})
 		shas = append(shas, st.SHA256)
+	}
+	if l.Link != "" && len(files) == 0 {
+		s.takeLink(w, r, v, l)
+		return
 	}
 	if len(shas) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -194,6 +207,29 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, v viewer) {
 		s.cfg.Worker.Kick()
 	}
 	s.render(w, "uploaded", map[string]any{"V": v, "Batch": id, "Files": files})
+}
+
+// takeLink queues a public cloud link with the labels; the worker downloads
+// its files into the account and makes their batch.
+func (s *Server) takeLink(w http.ResponseWriter, r *http.Request, v viewer, l *labels) {
+	if err := l.check(r, v.Cat); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		s.renderUpload(w, r, v, l, err.Error())
+		return
+	}
+	if _, err := cloud.Parse(l.Link); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		s.renderUpload(w, r, v, l, "Ссылка: "+err.Error()+".")
+		return
+	}
+	if s.cfg.Worker == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		s.renderUpload(w, r, v, l, "Фоновая обработка на сервере выключена: ссылку сейчас не принять.")
+		return
+	}
+	s.log.Printf("link: %s queued a link", v.Acc.ID)
+	s.cfg.Worker.IngestLink(v.Acc.ID, l.Link, l.toPipeline())
+	http.Redirect(w, r, "/batches", http.StatusSeeOther)
 }
 
 // --- batches -------------------------------------------------------------------
@@ -252,5 +288,5 @@ func (s *Server) process(w http.ResponseWriter, r *http.Request, v viewer) {
 
 var stageNames = map[string]string{
 	"extract": "распознавание", "split": "разбивка на документы", "digest": "резюме",
-	"date": "даты", "describe": "названия и характеристики", "index": "индекс", "folder": "приём папки",
+	"date": "даты", "describe": "названия и характеристики", "index": "индекс", "folder": "приём папки", "link": "приём ссылки",
 }

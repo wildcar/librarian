@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,14 +38,23 @@ type Status struct {
 	Ended       time.Time
 	CostUSD     float64  // of the last run
 	Errors      []string // of the last run
-	Folders     []string // folders queued for intake
-	LastFolder  string   // what the last folder intake did
+	Queue       []string // folders and links waiting for intake, as shown
+	Progress    string   // of the intake going on
+	LastIntake  string   // what the last folder or link intake did
 }
 
-// job is a folder the owner chose in the web, with the batch's labels.
+// job is a folder or a link the owner gave in the web, with the batch's labels.
 type job struct {
-	path   string
-	labels Labels
+	path, link string
+	labels     Labels
+}
+
+// shown names a job for the owner.
+func (j job) shown() string {
+	if j.link != "" {
+		return "ссылка " + j.link
+	}
+	return "папка " + j.path
 }
 
 // Worker processes every account in the background: one account at a time,
@@ -55,6 +65,7 @@ type Worker struct {
 	Tools    Tools
 	Catalog  func(*account.Account) (*catalog.Catalog, error)
 	LimitUSD float64
+	MaxFile  int64 // a link's file over this is skipped; 0 = 100 MB
 	Every    time.Duration
 	Log      io.Writer
 
@@ -92,11 +103,21 @@ func (w *Worker) Kick() {
 // IngestFolder queues a folder intake for an account: the next pass records
 // its files, makes the batch with the labels, and processes them.
 func (w *Worker) IngestFolder(accountID, path string, l Labels) {
+	w.queue(accountID, job{path: path, labels: l})
+}
+
+// IngestLink queues a public cloud link the same way: its files are
+// downloaded into the account's store.
+func (w *Worker) IngestLink(accountID, link string, l Labels) {
+	w.queue(accountID, job{link: link, labels: l})
+}
+
+func (w *Worker) queue(accountID string, j job) {
 	w.init()
 	w.mu.Lock()
-	w.jobs[accountID] = append(w.jobs[accountID], job{path: path, labels: l})
+	w.jobs[accountID] = append(w.jobs[accountID], j)
 	s := w.status[accountID]
-	s.Folders = append(s.Folders, path)
+	s.Queue = append(s.Queue, j.shown())
 	w.status[accountID] = s
 	w.mu.Unlock()
 	w.Kick()
@@ -182,7 +203,7 @@ func (w *Worker) one(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if err := w.folders(ctx, id, c); err != nil {
+	if err := w.intakes(ctx, id, a, c); err != nil {
 		return err
 	}
 	p, err := Waiting(ctx, c)
@@ -241,8 +262,8 @@ func (w *Worker) one(ctx context.Context, id string) error {
 	return nil
 }
 
-// folders takes the account's queued folder intakes, one by one.
-func (w *Worker) folders(ctx context.Context, id string, c *catalog.Catalog) error {
+// intakes takes the account's queued folders and links, one by one.
+func (w *Worker) intakes(ctx context.Context, id string, a *account.Account, c *catalog.Catalog) error {
 	for {
 		w.mu.Lock()
 		q := w.jobs[id]
@@ -253,28 +274,73 @@ func (w *Worker) folders(ctx context.Context, id string, c *catalog.Catalog) err
 		j := q[0]
 		w.jobs[id] = q[1:]
 		w.mu.Unlock()
-		w.set(id, func(s *Status) { s.State, s.Stage = Running, "folder" })
-		f, err := IngestFolder(ctx, c, j.path, max(w.Tools.Workers, 1), j.labels)
-		note := ""
-		switch {
-		case err != nil:
-			note = fmt.Sprintf("%s: %v", j.path, err)
-		case f.Batch.ID == 0:
-			note = fmt.Sprintf("%s: новых файлов нет, пачка не создана", j.path)
-		default:
-			note = fmt.Sprintf("%s: пачка №%d, файлов %d, новых %d", j.path, f.Batch.ID, f.Batch.Originals, f.Intake.NewFiles)
+		var note, logged string
+		if j.link != "" {
+			note, logged = w.link(ctx, id, a, c, j)
+		} else {
+			note = w.folder(ctx, id, c, j)
+			logged = note
 		}
-		if f != nil && f.Intake != nil && len(f.Intake.Errors) > 0 {
-			note += fmt.Sprintf(", не прочитано %d (нет доступа?)", len(f.Intake.Errors))
-		}
-		w.log.Printf("%s: %s", id, note)
+		w.log.Printf("%s: %s", id, logged)
 		w.set(id, func(s *Status) {
-			s.State, s.Stage, s.LastFolder = Finished, "", note
-			if len(s.Folders) > 0 {
-				s.Folders = s.Folders[1:]
+			s.State, s.Stage, s.Progress, s.LastIntake = Finished, "", "", note
+			if len(s.Queue) > 0 {
+				s.Queue = s.Queue[1:]
 			}
 		})
 	}
+}
+
+func (w *Worker) folder(ctx context.Context, id string, c *catalog.Catalog, j job) string {
+	w.set(id, func(s *Status) { s.State, s.Stage = Running, "folder" })
+	f, err := IngestFolder(ctx, c, j.path, max(w.Tools.Workers, 1), j.labels)
+	note := ""
+	switch {
+	case err != nil:
+		note = fmt.Sprintf("папка %s: %v", j.path, err)
+	case f.Batch.ID == 0:
+		note = fmt.Sprintf("папка %s: новых файлов нет, пачка не создана", j.path)
+	default:
+		note = fmt.Sprintf("папка %s: пачка №%d, файлов %d, новых %d", j.path, f.Batch.ID, f.Batch.Originals, f.Intake.NewFiles)
+	}
+	if f != nil && f.Intake != nil && len(f.Intake.Errors) > 0 {
+		note += fmt.Sprintf(", не прочитано %d (нет доступа?)", len(f.Intake.Errors))
+	}
+	return note
+}
+
+// link downloads a link's files; the log names the service, not the link,
+// which is the key to the share.
+func (w *Worker) link(ctx context.Context, id string, a *account.Account, c *catalog.Catalog, j job) (note, logged string) {
+	w.set(id, func(s *Status) { s.State, s.Stage, s.Progress = Running, "link", "список файлов" })
+	maxFile := w.MaxFile
+	if maxFile <= 0 {
+		maxFile = 100 << 20
+	}
+	l, err := IngestLink(ctx, c, a.Root(), j.link, maxFile, j.labels, func(done, total int) {
+		w.set(id, func(s *Status) { s.Progress = fmt.Sprintf("скачано %d из %d", done, total) })
+	})
+	switch {
+	case err != nil && l == nil:
+		note = fmt.Sprintf("ссылка %s: %v", j.link, err)
+	case err != nil:
+		note = fmt.Sprintf("ссылка %s (%s): %v", j.link, l.Service, err)
+	case l.Batch.ID == 0:
+		note = fmt.Sprintf("ссылка %s (%s): файлов %d, новых нет, пачка не создана", j.link, l.Service, l.Files)
+	default:
+		note = fmt.Sprintf("ссылка %s (%s): пачка №%d, файлов %d, новых %d", j.link, l.Service, l.Batch.ID, l.Files, l.New)
+	}
+	if l != nil && len(l.Skipped) > 0 {
+		note += fmt.Sprintf("; не взято %d: %s", len(l.Skipped), strings.Join(l.Skipped, "; "))
+	}
+	logged = "link intake"
+	if l != nil {
+		logged = fmt.Sprintf("link intake (%s): batch %d, files %d, new %d, skipped %d", l.Service, l.Batch.ID, l.Files, l.New, len(l.Skipped))
+	}
+	if err != nil {
+		logged += ": " + strings.ReplaceAll(err.Error(), j.link, "<link>")
+	}
+	return note, logged
 }
 
 func accounts(home string) ([]string, error) {

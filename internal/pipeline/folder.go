@@ -37,28 +37,37 @@ func IngestFolder(ctx context.Context, c *catalog.Catalog, path string, workers 
 		return nil, err
 	}
 	f := &Folder{Intake: rep}
-	originals := rep.New
+	f.Batch, f.Index, err = makeBatch(ctx, c, "folder", intake.URI(rep.Root), l, rep.Seen, rep.New)
+	return f, err
+}
+
+// makeBatch makes the batch of one intake: the new originals, or, when the
+// owner labelled the intake, every original seen in it, since the owner
+// labelled it as a whole. Nothing new and no labels make no batch (ID 0).
+func makeBatch(ctx context.Context, c *catalog.Catalog, kind, root string, l Labels, seen, fresh []string) (catalog.Batch, *index.Report, error) {
+	originals := fresh
 	if l.labelled() {
-		originals = rep.Seen
+		originals = seen
 	}
 	if len(originals) == 0 {
-		return f, nil
+		return catalog.Batch{}, nil, nil
 	}
 	now := time.Now()
 	persons := append([]string{}, l.Persons...)
 	if l.New != nil {
 		if err := c.AddPerson(ctx, *l.New, now); err != nil {
-			return f, err
+			return catalog.Batch{}, nil, err
 		}
 		persons = append(persons, l.New.Code)
 	}
-	f.Batch = catalog.Batch{Kind: "folder", Root: intake.URI(rep.Root), Label: l.Label, Persons: persons, Attrs: l.Attrs,
-		Originals: len(originals)}
-	if f.Batch.ID, err = c.CreateBatch(ctx, f.Batch, originals, now); err != nil {
-		return f, err
+	b := catalog.Batch{Kind: kind, Root: root, Label: l.Label, Persons: persons, Attrs: l.Attrs, Originals: len(originals)}
+	var err error
+	if b.ID, err = c.CreateBatch(ctx, b, originals, now); err != nil {
+		return catalog.Batch{}, nil, err
 	}
+	var rep *index.Report
 	if l.labelled() {
-		f.Index, err = index.Run(ctx, c, now)
+		rep, err = index.Run(ctx, c, now)
 	}
-	return f, err
+	return b, rep, err
 }

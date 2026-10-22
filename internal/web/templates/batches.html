@@ -9,14 +9,15 @@
 {{else if eq .State "failed"}}<b class="err">Обработка не удалась.</b>{{range .Errors}}<br><span class="muted">{{.}}</span>{{end}}
 {{else if eq .State "finished"}}Последняя обработка закончена в {{.Ended.Local.Format "15:04"}}, потрачено {{usd .CostUSD}}.{{if .Errors}} Ошибок: {{len .Errors}}.{{range .Errors}}<br><span class="muted">{{.}}</span>{{end}}{{end}}
 {{else}}Всё обработано.{{end}}
-{{range .Folders}}<br>В очереди на приём: {{.}}{{end}}
-{{if .LastFolder}}<br><span class="muted">Последний приём папки: {{.LastFolder}}</span>{{end}}
+{{if .Progress}}<br>Приём: {{.Progress}}{{end}}
+{{range .Queue}}<br>В очереди на приём: {{.}}{{end}}
+{{if .LastIntake}}<br><span class="muted">Последний приём: {{.LastIntake}}</span>{{end}}
 {{if and .Pending.Any (ne .State "running")}}<br><span class="muted">Ждут: файлов {{.Pending.Originals}}, разбивки {{.Pending.Split}}, резюме {{.Pending.Texts}}, дат {{.Pending.Dates}}, описаний {{.Pending.Descriptions}}.</span>{{end}}
-</div>{{if or (eq .State "running") .Pending.Any .Folders}}<script>setTimeout(function(){location.reload()},10000)</script>{{end}}{{end}}
+</div>{{if or (eq .State "running") .Pending.Any .Queue}}<script>setTimeout(function(){location.reload()},10000)</script>{{end}}{{end}}
 {{if .Batches}}<table class="list">
 <tr><th>№</th><th>Пачка</th><th>Чьи, характеристики</th><th>Готовность</th></tr>
 {{range .Batches}}<tr id="b{{.ID}}"><td>{{.ID}}</td>
-<td>{{if eq .Kind "upload"}}загрузка{{else if eq .Kind "folder"}}папка{{else}}{{.Kind}}{{end}}{{if .Label}} «{{.Label}}»{{end}}<br><span class="muted">{{.Created.Local.Format "02.01.2006 15:04"}}</span></td>
+<td>{{if eq .Kind "upload"}}загрузка{{else if eq .Kind "folder"}}папка{{else if eq .Kind "link"}}ссылка{{else}}{{.Kind}}{{end}}{{if .Label}} «{{.Label}}»{{end}}<br><span class="muted">{{.Created.Local.Format "02.01.2006 15:04"}}</span></td>
 <td>{{range $i, $p := .Persons}}{{if $i}}, {{end}}{{$p}}{{else}}<span class="muted">по тексту</span>{{end}}<br>{{range .Attrs}}<span class="chip">{{.Key}}: {{.Value}}</span>{{end}}</td>
 <td style="min-width:180px">{{with .P}}<div class="bar"><span style="width:{{.Percent}}%"></span></div>
 {{if .Done}}<span class="ok">✓ готово</span>{{else if $.Running}}в работе, {{.Percent}}%{{else if .Started}}обработано {{.Percent}}%, остальное — при следующем запуске{{else}}в очереди{{end}}<br>

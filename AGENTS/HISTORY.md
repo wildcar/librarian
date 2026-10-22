@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Public cloud links
+- What: `internal/cloud` lists and downloads Yandex Disk, Nextcloud and Google Drive shares (files, folders, Docs as PDF); «Загрузить» takes a link with the same labels; the worker downloads it into the account's store (`pipeline.IngestLink`, batch `kind = link`); «Пачки» shows the queue and download progress.
+- Why: ADR-0007 intake — documents kept in clouds, without downloading them by hand.
+- Files: internal/cloud/, internal/pipeline/{link,folder,worker}.go, internal/web/{upload,link_test}.go, internal/web/templates/{upload,batches,doc}.html
+- Next: try real links of each service; DOCX/XLSX.
+
 ## 2026-10-22 · Summary, characteristics and a new person from the page
 - What: «Резюме в порядке» / «Сделать заново» (catalog migration 20: `texts.summary_confirmed`, `texts.redo`; the worker remakes the layers, the old ones serve meanwhile); characteristics added and removed on the document page; a new person from the person form, linked here and by name across the account.
 - Why: owner wants every inbox reason closed from the web.
