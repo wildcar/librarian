@@ -1,6 +1,7 @@
 package extract_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"errors"
@@ -128,6 +129,18 @@ func (e *env) run(t *testing.T, dry bool) *extract.Report {
 
 var latin = strings.Repeat("Echocardiography protocol, left ventricle normal. ", 4)
 
+// docx builds a one-paragraph Word file.
+func docx(t *testing.T, text string) []byte {
+	var b bytes.Buffer
+	z := zip.NewWriter(&b)
+	w, _ := z.Create("word/document.xml")
+	fmt.Fprintf(w, `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>%s</w:t></w:r></w:p></w:body></w:document>`, text)
+	if err := z.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
 func TestTextLayerAndOCR(t *testing.T) {
 	var png bytes.Buffer
 	if err := pngEncode(&png); err != nil {
@@ -138,20 +151,21 @@ func TestTextLayerAndOCR(t *testing.T) {
 		"scan.pdf":    makePDF("", ""),
 		"photo.png":   png.Bytes(),
 		"notes.txt":   []byte("Plain text is read as it is."),
+		"letter.docx": docx(t, "Word is read as text."),
 		"archive.zip": append([]byte("PK\x03\x04"), make([]byte, 40)...),
 	})
 
 	dry := e.run(t, true)
-	if e.ocr.calls != 0 || dry.PagesOCR != 3 || dry.PagesTextLayer != 2 {
-		t.Fatalf("dry run: calls=%d ocr=%d text=%d, want 0 3 2", e.ocr.calls, dry.PagesOCR, dry.PagesTextLayer)
+	if e.ocr.calls != 0 || dry.PagesOCR != 3 || dry.PagesTextLayer != 3 {
+		t.Fatalf("dry run: calls=%d ocr=%d text=%d, want 0 3 3", e.ocr.calls, dry.PagesOCR, dry.PagesTextLayer)
 	}
 
 	rep := e.run(t, false)
-	if rep.Done != 4 || rep.Unsupported != 1 || rep.Failed != 0 {
+	if rep.Done != 5 || rep.Unsupported != 1 || rep.Failed != 0 {
 		t.Fatalf("run: done=%d unsupported=%d failed=%d errors=%v", rep.Done, rep.Unsupported, rep.Failed, rep.Errors)
 	}
-	if rep.PagesTextLayer != 2 || rep.PagesOCR != 3 || e.ocr.calls != 3 {
-		t.Errorf("pages: text=%d ocr=%d calls=%d, want 2 3 3", rep.PagesTextLayer, rep.PagesOCR, e.ocr.calls)
+	if rep.PagesTextLayer != 3 || rep.PagesOCR != 3 || e.ocr.calls != 3 {
+		t.Errorf("pages: text=%d ocr=%d calls=%d, want 3 3 3", rep.PagesTextLayer, rep.PagesOCR, e.ocr.calls)
 	}
 	if rep.CostUSD < 0.0299 || rep.CostUSD > 0.0301 {
 		t.Errorf("cost = %v, want 0.03", rep.CostUSD)
@@ -172,6 +186,12 @@ func TestTextLayerAndOCR(t *testing.T) {
 	ps, _ = e.cat.Pages(context.Background(), sha)
 	if len(ps) != 1 || ps[0].Engine != "file" || ps[0].Text != "Plain text is read as it is." {
 		t.Errorf("notes.txt pages = %+v", ps)
+	}
+
+	sha, _ = intake.HashFile(filepath.Join(e.src, "letter.docx"))
+	ps, _ = e.cat.Pages(context.Background(), sha)
+	if len(ps) != 1 || ps[0].Engine != pages.DOCX || ps[0].Text != "Word is read as text." {
+		t.Errorf("letter.docx pages = %+v", ps)
 	}
 
 	// Nothing is left: a second run calls no model and the archive is not retried.

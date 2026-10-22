@@ -249,6 +249,12 @@ var schema = []string{
 	// to be made again; new layers clear both.
 	`ALTER TABLE texts ADD COLUMN summary_confirmed TEXT;
 	ALTER TABLE texts ADD COLUMN redo INTEGER NOT NULL DEFAULT 0;`,
+	// 21: Word and Excel files are read now: those set aside go back to
+	// extraction.
+	`DELETE FROM extraction WHERE status = 'unsupported' AND sha256 IN (SELECT sha256 FROM originals WHERE mime IN (
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+		'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+		'application/msword', 'application/vnd.ms-excel'));`,
 }
 
 // Catalog is an open account catalog.

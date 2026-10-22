@@ -4,6 +4,13 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Word and Excel files are read
+- What: .docx and .xlsx read in Go (tables as «cell | cell», sheets by name, dates from number formats), .doc by catdoc, .xls by python3-xlrd; stored as text pages like plain text, no model, no cost; migration 21 retries files set aside as unsupported.
+- Why: owner keeps documents in Word and Excel; they were listed as «не читаются».
+- Files: internal/pages/{office,legacy}.go, internal/extract/extract.go, internal/catalog/catalog.go, internal/web/templates/upload.html
+- Fixes-on-the-fly: xls2csv shifted dates by four years on a test file, so .xls goes through xlrd.
+- Next: try a real .doc; owner's checks of cloud links.
+
 ## 2026-10-22 · Public cloud links
 - What: `internal/cloud` lists and downloads Yandex Disk, Nextcloud and Google Drive shares (files, folders, Docs as PDF); «Загрузить» takes a link with the same labels; the worker downloads it into the account's store (`pipeline.IngestLink`, batch `kind = link`); «Пачки» shows the queue and download progress.
 - Why: ADR-0007 intake — documents kept in clouds, without downloading them by hand.

@@ -12,6 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
+- Word and Excel are read as text (.docx/.xlsx in Go, .doc by catdoc, .xls by python3-xlrd, both installed on homesrv); files set aside before are read again (migration 21). Old .doc not tried on a real file.
 - Cloud links on «Загрузить»: Yandex Disk, Nextcloud, Google Drive (files, Docs as PDF, folders through the embedded view); files are downloaded into the account and become a `link` batch. Tested against fake services only; no real link tried yet.
 - Document page opens the original («Открыть файл» next to each file, PDF at the document's page, served only while the hash matches); «Входящие» lists documents without a person and every open check, by kind; splits, doubted pages and assistant edits are settled there by buttons (catalog migration 19). Persons (also a new one), date and characteristics are edited on the document page; a flagged summary is accepted or made again (migration 20). Every inbox reason can now be closed from the web. Owner checked the first part live 2026-10-22; the buttons deployed 2026-10-22.
 - Server folders through the web (`/folder`): only inside the account's allowed roots; none set yet for `sergey`, and `librarian` may only traverse `/mnt/raid/document/Сережа`.
@@ -46,7 +47,7 @@ an MCP server from any AI assistant.
 - Characteristics read from documents by a model (kind of document, specialty, organisation kind), `source = model`, same table as batch characteristics.
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
 - `add_document` over MCP.
-- Try cloud links on real shares of each service; `list_inbox` over MCP; DOCX/XLSX.
+- Try cloud links on real shares of each service; `list_inbox` over MCP; ODT/ODS, RTF, archives.
 - Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
 - MCP server skeleton with per-account credential and `list_persons` / `search_documents`.
 

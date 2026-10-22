@@ -277,7 +277,7 @@ func readable(p catalog.Pending) (string, error) {
 // one handles a single original and returns its extraction status.
 func (s *Stage) one(ctx context.Context, o Options, p catalog.Pending, rep *Report) (status string, pageCount int, errText string) {
 	isPDF := p.MIME == "application/pdf"
-	if pages.TextTypes[p.MIME] {
+	if pages.TextTypes[p.MIME] || pages.OfficeTypes[p.MIME] != nil {
 		return s.text(ctx, o, p, rep)
 	}
 	if !isPDF && !pages.ImageTypes[p.MIME] {
@@ -452,14 +452,21 @@ func (s *Stage) one(ctx context.Context, o Options, p catalog.Pending, rep *Repo
 	return catalog.ExtractDone, pageCount, ""
 }
 
-// text stores a plain text file as pages: the file is the text, so there is
-// nothing to recognise and nothing to pay.
+// text stores a plain text file or an office document as pages: the file
+// holds its text, so there is nothing to recognise and nothing to pay.
 func (s *Stage) text(ctx context.Context, o Options, p catalog.Pending, rep *Report) (status string, pageCount int, errText string) {
 	path, err := readable(p)
 	if err != nil {
 		return catalog.ExtractError, 0, err.Error()
 	}
-	texts, err := pages.ReadText(path)
+	read, engine := pages.ReadText, "file"
+	if r := pages.OfficeTypes[p.MIME]; r != nil {
+		read, engine = r, p.MIME
+	}
+	texts, err := read(path)
+	if errors.Is(err, pages.ErrNoCatdoc) || errors.Is(err, pages.ErrNoXlrd) {
+		return catalog.ExtractError, 0, err.Error() // retried once the tools are installed
+	}
 	if err != nil {
 		return catalog.ExtractUnsupported, 0, err.Error()
 	}
@@ -468,7 +475,7 @@ func (s *Stage) text(ctx context.Context, o Options, p catalog.Pending, rep *Rep
 		return catalog.ExtractDone, len(texts), ""
 	}
 	for i, t := range texts {
-		pg := catalog.Page{SHA256: p.SHA256, Page: i + 1, Pipeline: Pipeline, Method: "text-layer", Engine: "file", Text: t}
+		pg := catalog.Page{SHA256: p.SHA256, Page: i + 1, Pipeline: Pipeline, Method: "text-layer", Engine: engine, Text: t}
 		if err := s.Catalog.SavePage(ctx, pg, s.Now()); err != nil {
 			return catalog.ExtractError, len(texts), err.Error()
 		}

@@ -18,6 +18,7 @@ Update whenever a new tool, credential, or host-specific quirk is learned.
 
 - Go 1.27.3 from go.dev in `/usr/local/go`, linked into `/usr/local/bin` (apt has only 1.22; module floor `go 1.26.0`). gcc from `build-essential`, so `go test -race` works.
 - poppler-utils 24.02 (`pdftotext`, `pdftoppm` on PATH; `LIBRARIAN_POPPLER_DIR` not needed).
+- catdoc 0.95 and python3-xlrd 2.0.1 (apt, 2026-10-22) for old .doc and .xls; `xls2csv` from catdoc is not used: it shifted a test date by four years.
 - tesseract 5.3.4 (apt); language data `rus`, `eng` from tessdata_best and `osd` in `/usr/local/share/tessdata` — set `LIBRARIAN_TESSDATA` to it (apt tessdata has no `rus`).
 - Service user `librarian` (system, nologin); data root `/var/lib/librarian`; dev data root `~/librarian-dev`.
 
