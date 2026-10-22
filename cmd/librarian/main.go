@@ -2,6 +2,7 @@
 //
 //	librarian [--home DIR] account create [--email E] <id>
 //	librarian [--home DIR] account email <id> <e-mail> | unbind <e-mail> | list
+//	librarian [--home DIR] account root add|remove|list <id> [path]
 //	librarian [--home DIR] login-link <e-mail>
 //	librarian [--home DIR] ingest  --account <id> [--workers N] [batch labels] [--batch-label L] <folder>
 //	librarian [--home DIR] batch   list --account <id>
@@ -56,7 +57,6 @@ import (
 	"github.com/wildcar/librarian/internal/dating"
 	"github.com/wildcar/librarian/internal/extract"
 	"github.com/wildcar/librarian/internal/index"
-	"github.com/wildcar/librarian/internal/intake"
 	"github.com/wildcar/librarian/internal/layers"
 	"github.com/wildcar/librarian/internal/mail"
 	"github.com/wildcar/librarian/internal/mcpserver"
@@ -75,6 +75,7 @@ var version = "dev"
 const usage = `usage:
   librarian [--home DIR] account create [--email E] <id>
   librarian [--home DIR] account email <id> <e-mail> | unbind <e-mail> | list
+  librarian [--home DIR] account root add|remove|list <id> [path]
   librarian [--home DIR] login-link <e-mail>
   librarian [--home DIR] ingest --account <id> [--workers N] [labels] [--batch-label L] <folder>
   librarian [--home DIR] batch list --account <id>
@@ -205,32 +206,31 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 			if err != nil {
 				return err
 			}
-			rep, err := intake.Folder(ctx, c, fs.Arg(0), *workers)
+			l := pipeline.Labels{Persons: labels.persons, Attrs: attrs, Label: *batchLabel}
+			if labels.name != "" {
+				l.Persons = nil
+				l.New = &catalog.Person{Code: labels.persons[0], Label: labels.label, FullName: labels.name,
+					Aliases: labels.aliases, BirthDate: labels.birth}
+			}
+			f, err := pipeline.IngestFolder(ctx, c, fs.Arg(0), *workers, l)
+			if f != nil && f.Intake != nil {
+				report.Intake(out, f.Intake)
+			}
 			if err != nil {
 				return err
 			}
-			report.Intake(out, rep)
-			// The new originals make the batch; a labelled run takes every
-			// original it saw: the owner labelled the folder as a whole.
-			labelled := len(labels.persons) > 0 || len(attrs) > 0
-			originals := rep.New
-			if labelled {
-				originals = rep.Seen
+			if l.New != nil {
+				fmt.Fprintf(out, "Добавлен %s (%s).\n", l.New.Code, l.New.FullName)
 			}
-			if len(originals) == 0 {
-				return nil
+			if f.Batch.ID != 0 {
+				report.BatchCreated(out, f.Batch)
 			}
-			if err := labels.createPerson(ctx, c, out); err != nil {
-				return err
-			}
-			b := catalog.Batch{Kind: "folder", Root: intake.URI(rep.Root), Label: *batchLabel, Persons: labels.persons, Attrs: attrs}
-			if b.ID, err = c.CreateBatch(ctx, b, originals, time.Now()); err != nil {
-				return err
-			}
-			b.Originals = len(originals)
-			report.BatchCreated(out, b)
-			if labelled {
-				return reindex(ctx, c, out)
+			if f.Index != nil {
+				un, err := c.Unlinked(ctx)
+				if err != nil {
+					return err
+				}
+				report.IndexRun(out, f.Index, un)
 			}
 		case "dupes":
 			d, err := c.Duplicates(ctx)
@@ -521,7 +521,7 @@ func serve(ctx context.Context, home, addr string, out io.Writer) error {
 // accountCmd creates accounts and binds the e-mails that log into them.
 func accountCmd(ctx context.Context, home string, rest []string, out io.Writer) error {
 	if len(rest) == 0 {
-		return usageError{"expected: account create | email | unbind | list"}
+		return usageError{"expected: account create | email | unbind | list | root"}
 	}
 	fs := flag.NewFlagSet("account", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -567,6 +567,42 @@ func accountCmd(ctx context.Context, home string, rest []string, out io.Writer) 
 			return err
 		}
 		fmt.Fprintf(out, "Почта %s больше не входит ни в какой аккаунт, её сессии закрыты\n", fs.Arg(0))
+		return nil
+	case "root":
+		// account root add|remove|list <id> [path]
+		if fs.NArg() < 2 {
+			return usageError{"expected: account root add|remove|list <id> [path]"}
+		}
+		a, err := account.Open(home, fs.Arg(1))
+		if err != nil {
+			return err
+		}
+		switch {
+		case fs.Arg(0) == "add" && fs.NArg() == 3:
+			abs, err := a.AddRoot(fs.Arg(2))
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Аккаунт %s может брать документы из %s\n", a.ID, abs)
+		case fs.Arg(0) == "remove" && fs.NArg() == 3:
+			if err := a.RemoveRoot(fs.Arg(2)); err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Папка %s больше не разрешена\n", fs.Arg(2))
+		case fs.Arg(0) == "list" && fs.NArg() == 2:
+			rs, err := a.Roots()
+			if err != nil {
+				return err
+			}
+			if len(rs) == 0 {
+				fmt.Fprintln(out, "Разрешённых папок нет: account root add <id> <path>")
+			}
+			for _, r := range rs {
+				fmt.Fprintln(out, r)
+			}
+		default:
+			return usageError{"expected: account root add|remove|list <id> [path]"}
+		}
 		return nil
 	case "list":
 		reg, err := users.Open(home)

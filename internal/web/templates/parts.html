@@ -70,9 +70,26 @@ pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}
 {{end}}
 
 {{define "bar"}}<header>
-<nav class="nav"><a class="brand" href="/">Библиотека</a>{{if .}}<a href="/">Документы</a><a href="/upload">Загрузить</a><a href="/batches">Пачки</a><a href="/assistants">Ассистенты</a>{{end}}</nav>
+<nav class="nav"><a class="brand" href="/">Библиотека</a>{{if .}}<a href="/">Документы</a><a href="/upload">Загрузить</a><a href="/folder">Папка</a><a href="/batches">Пачки</a><a href="/assistants">Ассистенты</a>{{end}}</nav>
 {{if .}}<div class="who"><span>{{.Email}}</span><form method="post" action="/logout"><button class="link">Выйти</button></form></div>{{end}}
 </header>
+{{end}}
+
+{{define "labels"}}<fieldset><legend>Чьи документы</legend>
+{{range .Persons}}<label class="check"><input type="checkbox" name="person" value="{{.Code}}"{{if index $.Chosen .Code}} checked{{end}}> {{.Label}} ({{.Code}})</label>{{end}}
+<details{{if .L.NewName}} open{{end}}><summary>Новый человек</summary>
+<div class="grid2">
+<input type="text" name="new_code" value="{{.L.NewCode}}" placeholder="код, например ЕСБ">
+<input type="text" name="new_name" value="{{.L.NewName}}" placeholder="полное имя">
+<input type="text" name="new_label" value="{{.L.NewLabel}}" placeholder="как называть: Я, Мама…">
+<input type="text" name="new_birth" value="{{.L.NewBirth}}" placeholder="дата рождения ГГГГ-ММ-ДД">
+</div></details>
+<p class="muted">Можно никого не выбирать: людей найдут по именам в тексте.</p>
+</fieldset>
+<fieldset><legend>Характеристики пачки</legend>
+<textarea name="attrs" placeholder="по одной в строке: тема = отпуск 2026">{{.L.AttrsText}}</textarea>
+<input type="text" name="label" value="{{.L.Label}}" placeholder="название пачки (необязательно)" style="margin-top:8px">
+</fieldset>
 {{end}}
 
 {{define "foot"}}</body>

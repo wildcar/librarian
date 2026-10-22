@@ -4,21 +4,7 @@
 <p class="muted">Всё, что вы загрузите за раз, станет одной пачкой: ей можно сразу сказать, чьи это документы и какие у них характеристики. Распознавание и резюме идут в фоне, ход виден на странице «Пачки».</p>
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 <form method="post" action="/upload" enctype="multipart/form-data" id="up">
-<fieldset><legend>Чьи документы</legend>
-{{range .Persons}}<label class="check"><input type="checkbox" name="person" value="{{.Code}}"{{if index $.Chosen .Code}} checked{{end}}> {{.Label}} ({{.Code}})</label>{{end}}
-<details{{if .L.NewName}} open{{end}}><summary>Новый человек</summary>
-<div class="grid2">
-<input type="text" name="new_code" value="{{.L.NewCode}}" placeholder="код, например ЕСБ">
-<input type="text" name="new_name" value="{{.L.NewName}}" placeholder="полное имя">
-<input type="text" name="new_label" value="{{.L.NewLabel}}" placeholder="как называть: Я, Мама…">
-<input type="text" name="new_birth" value="{{.L.NewBirth}}" placeholder="дата рождения ГГГГ-ММ-ДД">
-</div></details>
-<p class="muted">Можно никого не выбирать: людей найдут по именам в тексте.</p>
-</fieldset>
-<fieldset><legend>Характеристики пачки</legend>
-<textarea name="attrs" placeholder="по одной в строке: тема = отпуск 2026">{{.L.AttrsText}}</textarea>
-<input type="text" name="label" value="{{.L.Label}}" placeholder="название пачки (необязательно)" style="margin-top:8px">
-</fieldset>
+{{template "labels" .}}
 <label class="drop" id="drop">Перетащите файлы сюда или выберите их
 <input type="file" name="files" id="files" multiple required>
 <span id="picked"></span></label>

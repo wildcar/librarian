@@ -103,6 +103,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /doc/{id}", s.authed(s.document))
 	mux.HandleFunc("GET /upload", s.authed(s.uploadForm))
 	mux.HandleFunc("POST /upload", s.authed(s.upload))
+	mux.HandleFunc("GET /folder", s.authed(s.folder))
+	mux.HandleFunc("POST /folder", s.authed(s.takeFolder))
 	mux.HandleFunc("GET /batches", s.authed(s.batches))
 	mux.HandleFunc("POST /batches/process", s.authed(s.process))
 	mux.HandleFunc("GET /assistants", s.authed(s.assistants))

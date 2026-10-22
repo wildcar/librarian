@@ -19,12 +19,20 @@ import (
 	"github.com/wildcar/librarian/internal/account"
 	"github.com/wildcar/librarian/internal/catalog"
 	"github.com/wildcar/librarian/internal/mcpserver"
+	"github.com/wildcar/librarian/internal/pipeline"
 	"github.com/wildcar/librarian/internal/users"
 	"github.com/wildcar/librarian/internal/web"
 )
 
 // service runs MCP, the web and OAuth as `librarian serve` does.
 func service(t *testing.T, home string, box *outbox) (*httptest.Server, *users.Registry) {
+	t.Helper()
+	ts, reg, _ := serviceWith(t, home, box, nil)
+	return ts, reg
+}
+
+// serviceWith also gives the web a worker; its catalogs are the server's.
+func serviceWith(t *testing.T, home string, box *outbox, worker *pipeline.Worker) (*httptest.Server, *users.Registry, *mcpserver.Server) {
 	t.Helper()
 	reg, err := users.Open(home)
 	if err != nil {
@@ -35,8 +43,11 @@ func service(t *testing.T, home string, box *outbox) (*httptest.Server, *users.R
 	t.Cleanup(func() { m.Close() })
 	ts := httptest.NewServer(nil)
 	t.Cleanup(ts.Close)
+	if worker != nil {
+		worker.Catalog = m.Catalog
+	}
 	w, err := web.New(web.Config{Registry: reg, Mail: box, Public: ts.URL, Catalog: m.Catalog,
-		HasStaticToken: (*account.Account).HasToken})
+		HasStaticToken: (*account.Account).HasToken, Worker: worker})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +57,7 @@ func service(t *testing.T, home string, box *outbox) (*httptest.Server, *users.R
 		return a.Account, a.Assistant, a.Expires, err
 	}, w.ResourceMetadataURL())
 	ts.Config.Handler = m.Handler()
-	return ts, reg
+	return ts, reg, m
 }
 
 // TestAssistantByLetter connects the SDK's own MCP client: it discovers the

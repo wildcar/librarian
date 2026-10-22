@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -36,6 +37,14 @@ type Status struct {
 	Ended       time.Time
 	CostUSD     float64  // of the last run
 	Errors      []string // of the last run
+	Folders     []string // folders queued for intake
+	LastFolder  string   // what the last folder intake did
+}
+
+// job is a folder the owner chose in the web, with the batch's labels.
+type job struct {
+	path   string
+	labels Labels
 }
 
 // Worker processes every account in the background: one account at a time,
@@ -52,6 +61,7 @@ type Worker struct {
 	mu       sync.Mutex
 	status   map[string]Status
 	approved map[string]float64 // an estimate the owner allowed
+	jobs     map[string][]job
 	kick     chan struct{}
 	log      *log.Logger
 }
@@ -61,7 +71,7 @@ func (w *Worker) init() {
 	defer w.mu.Unlock()
 	if w.kick == nil {
 		w.kick = make(chan struct{}, 1)
-		w.status, w.approved = map[string]Status{}, map[string]float64{}
+		w.status, w.approved, w.jobs = map[string]Status{}, map[string]float64{}, map[string][]job{}
 		out := w.Log
 		if out == nil {
 			out = io.Discard
@@ -77,6 +87,19 @@ func (w *Worker) Kick() {
 	case w.kick <- struct{}{}:
 	default:
 	}
+}
+
+// IngestFolder queues a folder intake for an account: the next pass records
+// its files, makes the batch with the labels, and processes them.
+func (w *Worker) IngestFolder(accountID, path string, l Labels) {
+	w.init()
+	w.mu.Lock()
+	w.jobs[accountID] = append(w.jobs[accountID], job{path: path, labels: l})
+	s := w.status[accountID]
+	s.Folders = append(s.Folders, path)
+	w.status[accountID] = s
+	w.mu.Unlock()
+	w.Kick()
 }
 
 // Status returns an account's state.
@@ -128,6 +151,13 @@ func (w *Worker) Start(ctx context.Context) {
 func (w *Worker) Pass(ctx context.Context) {
 	w.init()
 	ids, err := accounts(w.Home)
+	w.mu.Lock()
+	for id := range w.jobs { // an account created since the listing
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	w.mu.Unlock()
 	if err != nil {
 		w.log.Printf("accounts: %v", err)
 		return
@@ -150,6 +180,9 @@ func (w *Worker) one(ctx context.Context, id string) error {
 	}
 	c, err := w.Catalog(a)
 	if err != nil {
+		return err
+	}
+	if err := w.folders(ctx, id, c); err != nil {
 		return err
 	}
 	p, err := Waiting(ctx, c)
@@ -206,6 +239,42 @@ func (w *Worker) one(ctx context.Context, id string) error {
 		w.log.Printf("%s: done, $%.3f, %d errors", id, rep.CostUSD, len(rep.Errors))
 	}
 	return nil
+}
+
+// folders takes the account's queued folder intakes, one by one.
+func (w *Worker) folders(ctx context.Context, id string, c *catalog.Catalog) error {
+	for {
+		w.mu.Lock()
+		q := w.jobs[id]
+		if len(q) == 0 {
+			w.mu.Unlock()
+			return nil
+		}
+		j := q[0]
+		w.jobs[id] = q[1:]
+		w.mu.Unlock()
+		w.set(id, func(s *Status) { s.State, s.Stage = Running, "folder" })
+		f, err := IngestFolder(ctx, c, j.path, max(w.Tools.Workers, 1), j.labels)
+		note := ""
+		switch {
+		case err != nil:
+			note = fmt.Sprintf("%s: %v", j.path, err)
+		case f.Batch.ID == 0:
+			note = fmt.Sprintf("%s: новых файлов нет, пачка не создана", j.path)
+		default:
+			note = fmt.Sprintf("%s: пачка №%d, файлов %d, новых %d", j.path, f.Batch.ID, f.Batch.Originals, f.Intake.NewFiles)
+		}
+		if f != nil && f.Intake != nil && len(f.Intake.Errors) > 0 {
+			note += fmt.Sprintf(", не прочитано %d (нет доступа?)", len(f.Intake.Errors))
+		}
+		w.log.Printf("%s: %s", id, note)
+		w.set(id, func(s *Status) {
+			s.State, s.Stage, s.LastFolder = Finished, "", note
+			if len(s.Folders) > 0 {
+				s.Folders = s.Folders[1:]
+			}
+		})
+	}
 }
 
 func accounts(home string) ([]string, error) {

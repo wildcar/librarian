@@ -125,8 +125,11 @@ embedded in the binary: no build step, no separate frontend. Pages:
 - **Загрузить** — three sources, each making a batch (ADR-0006) with persons and
   characteristics given in the same form as `ingest`:
   - a server folder, chosen only inside the roots the administrator allowed for the
-    account (`librarian account root <id> <path>`); the web never browses the rest of
-    the server;
+    account (`librarian account root add|remove|list <id> [path]`, kept in the account's
+    `roots` file); a path is resolved with its symbolic links before the check, so
+    neither `..` nor a link leads out; the web never browses the rest of the server. The
+    worker takes the folder like `ingest` (same batch rules, shared code) and the files
+    stay where they are;
   - files dropped into the page (size limit per file and per request), kept in the
     account's store, since they have no other source (ADR-0004);
   - a public cloud link: Yandex Disk and Nextcloud shares (files and folders), a Google

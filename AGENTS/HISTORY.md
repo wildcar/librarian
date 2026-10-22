@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · A server folder as a source in the web
+- What: allowed roots per account (`account root add|remove|list`, `Account.Within` resolves links); «Папка» browses them and queues a folder with labels; the worker runs the folder intake (`pipeline.IngestFolder`, now also behind `ingest`) before processing; «Пачки» shows the queue and the last intake.
+- Why: owner wants to add documents already on the server from the browser, without leaving it for the rest of the server.
+- Files: internal/account/roots.go, internal/pipeline/folder.go, internal/pipeline/worker.go, internal/web/folder.go, internal/web/templates/*, cmd/librarian/main.go
+- Next: cloud links; the original on the document page.
+
 ## 2026-10-22 · Uploads through the web, processed in the background
 - What: `internal/pipeline` runs extract → split → digest → date → index under a per-account flock (`librarian run`); a worker in `serve` runs it after uploads and hourly, holding runs whose OCR estimate is over `LIBRARIAN_AUTO_LIMIT_USD` until «Обработать»; «Загрузить» stores files in the account and makes a labelled batch; «Пачки» shows progress.
 - Why: owner wants to add documents from the browser; the stages were started by hand one by one.

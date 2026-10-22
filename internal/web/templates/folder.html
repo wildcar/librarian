@@ -1,0 +1,19 @@
+{{template "head" "Папка на сервере"}}{{template "bar" .V}}
+<main>
+<h1>Папка на сервере</h1>
+{{if not .Roots}}<p>Администратор пока не разрешил ни одной папки. Команда на сервере: <code>librarian account root add {{.V.Acc.ID}} /путь/к/папке</code>.</p>
+{{else}}
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+{{if .Path}}<p><a href="/folder">Разрешённые папки</a>{{range .Crumbs}} / <a href="/folder?path={{.Path}}">{{.Name}}</a>{{end}}</p>{{end}}
+{{if .Denied}}<p class="err">Сервису не дали права читать эту папку. Нужно на сервере: <code>sudo setfacl -R -m u:librarian:rX "{{.Path}}"</code> и то же с <code>-d</code> для новых файлов.</p>{{end}}
+{{if .Dirs}}<table class="list">{{range .Dirs}}<tr><td><a href="/folder?path={{.Path}}">{{.Name}}/</a></td></tr>{{end}}</table>{{end}}
+{{if .Path}}{{if not .Denied}}<p class="muted">Файлов прямо в этой папке: {{.Files}}{{if .Dirs}}; вложенные папки тоже войдут в пачку{{end}}.</p>
+<form method="post" action="/folder">
+<input type="hidden" name="path" value="{{.Path}}">
+{{template "labels" .}}
+<p><button>Взять эту папку</button></p>
+<p class="muted">Файлы не копируются: сервис читает их из папки. Повторный приём той же папки добавит только новое; с метками пачка охватит все файлы папки.</p>
+</form>{{end}}{{end}}
+{{end}}
+</main>
+{{template "foot"}}

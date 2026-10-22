@@ -251,5 +251,5 @@ func (s *Server) process(w http.ResponseWriter, r *http.Request, v viewer) {
 
 var stageNames = map[string]string{
 	"extract": "распознавание", "split": "разбивка на документы", "digest": "резюме",
-	"date": "даты", "index": "индекс",
+	"date": "даты", "index": "индекс", "folder": "приём папки",
 }
