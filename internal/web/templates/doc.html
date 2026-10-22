@@ -1,6 +1,6 @@
 {{template "head" .D.Title}}{{template "bar" .V}}
 <main>
-<p><a href="/">← Документы</a></p>
+{{template "backlink"}}
 <div class="card">
 <h1>{{.D.Title}}</h1>
 {{if .D.Review}}<div class="review">Не проверено:<ul>{{range .D.Review}}<li>{{template "fix" .}}</li>{{end}}</ul>{{if .D.Assisted}}<div>правка: {{.D.Assisted}}</div>{{end}}</div>{{end}}

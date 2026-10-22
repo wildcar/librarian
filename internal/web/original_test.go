@@ -203,7 +203,14 @@ func TestEditFromPage(t *testing.T) {
 	if _, _, page := b.do("GET", "/inbox", nil); !strings.Contains(page, `href="/doc/`+second+`?edit=person#person"`) {
 		t.Errorf("no person link in the inbox: %s", page)
 	}
-	if _, _, page := b.do("GET", "/doc/"+second+"?edit=person", nil); !strings.Contains(page, `id="person" open`) {
+	// The tree and the inbox remember themselves as the way back.
+	if _, _, page := b.do("GET", "/?by=person", nil); !strings.Contains(page, `data-k="Папа (ЕБВ)"`) || !strings.Contains(page, `label:"Документы"`) {
+		t.Errorf("tree keeps no state: %s", page)
+	}
+	if _, _, page := b.do("GET", "/inbox", nil); !strings.Contains(page, `label:"Входящие"`) {
+		t.Errorf("inbox keeps no state: %s", page)
+	}
+	if _, _, page := b.do("GET", "/doc/"+second+"?edit=person", nil); !strings.Contains(page, `id="person" open`) || !strings.Contains(page, `id="back"`) {
 		t.Errorf("person form closed: %s", page)
 	}
 

@@ -11,9 +11,10 @@
 </form>
 {{template "node" .Root}}
 </main>
+{{template "keep" "Документы"}}
 {{template "foot"}}
 
-{{define "node"}}{{range .Nodes}}<details{{if .None}} class="none"{{end}}><summary>{{.Label}} <span class="count">{{.Count}}</span></summary>
+{{define "node"}}{{range .Nodes}}<details data-k="{{.Label}}"{{if .None}} class="none"{{end}}><summary>{{.Label}} <span class="count">{{.Count}}</span></summary>
 {{template "node" .}}</details>
 {{end}}{{if .Docs}}<ul class="docs">
 {{range .Docs}}<li><span class="d">{{date .Date .Partial}}</span><span><a href="/doc/{{.ID}}">{{if .Title}}{{.Title}}{{else}}{{title .Summary}}{{end}}</a>

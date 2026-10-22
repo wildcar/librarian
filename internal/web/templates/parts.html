@@ -109,6 +109,28 @@ pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}
 {{else if eq .Fix "page"}}<button class="small">Прочитано верно</button>
 {{else}}<button class="small">Принять</button> <button class="small ghost" name="revert" value="1">Отменить</button>{{end}}</form></span>{{end}}{{end}}
 
+{{define "keep"}}<script>
+// Remembers, per tab, where documents were opened from (for «←» on the
+// document page), the page's scroll and which branches were open.
+(function(){
+var key='keep:'+location.pathname+location.search, ds=document.querySelectorAll('main details[data-k]');
+function path(d){var p=[];for(var e=d;e;e=e.parentElement&&e.parentElement.closest('details[data-k]'))p.unshift(e.dataset.k);return p.join('\u0001')}
+function save(){try{var o=[];ds.forEach(function(d){if(d.open)o.push(path(d))});sessionStorage.setItem(key,JSON.stringify({open:o,y:window.scrollY}))}catch(e){}}
+try{
+sessionStorage.setItem('back',JSON.stringify({url:location.pathname+location.search,label:{{.}}}));
+var s=JSON.parse(sessionStorage.getItem(key)||'null');
+if(s){var open={};s.open.forEach(function(k){open[k]=1});ds.forEach(function(d){if(open[path(d)])d.open=true});if(s.y)window.scrollTo(0,s.y)}
+}catch(e){}
+document.addEventListener('toggle',save,true);
+window.addEventListener('pagehide',save);
+document.addEventListener('click',function(e){if(e.target.closest('a'))save()},true);
+})();
+</script>{{end}}
+
+{{define "backlink"}}<p><a id="back" href="/">← Документы</a></p><script>
+try{var b=JSON.parse(sessionStorage.getItem('back')||'null');if(b&&b.url&&b.url.charAt(0)=='/'&&b.url.charAt(1)!='/'){var a=document.getElementById('back');a.href=b.url;a.textContent='← '+b.label}}catch(e){}
+</script>{{end}}
+
 {{define "foot"}}</body>
 </html>
 {{end}}

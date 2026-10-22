@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · The way back keeps its place
+- What: the tree remembers open branches and scroll per tab (`sessionStorage`, branch path by label), the inbox its scroll; «←» on the document page leads to the list it was opened from («Документы» with the same levels, or «Входящие» with its filter).
+- Why: owner found «← Документы» always led to a collapsed tree, even from the inbox.
+- Files: internal/web/templates/{parts,tree,inbox,doc}.html
+- Next: a flagged summary and characteristics from the page.
+
 ## 2026-10-22 · Persons and date edited on the document page
 - What: «изменить» under «Дата» and «Чей» on the document page: ticked persons become the owner's links, the rest are ruled out (none ticked = nobody's, the inbox stops asking); the date in Russian forms, «нет даты», «вернуть дату библиотеки»; inbox person and date reasons link to the open form.
 - Why: owner wants to settle the remaining inbox reasons without the CLI or an assistant.
