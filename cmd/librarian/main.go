@@ -269,7 +269,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 			}
 			report.TextsState(out, tb, tc, tn)
 		case "digest":
-			rc, err := router.Dial(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
+			rc, err := dialRouter(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
 			if err != nil {
 				return err
 			}
@@ -285,7 +285,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 			}
 			return err
 		case "date":
-			rc, err := router.Dial(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
+			rc, err := dialRouter(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
 			if err != nil {
 				return err
 			}
@@ -327,7 +327,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 				return usageError{"--layer must be summary, essential or verbatim"}
 			}
 		case "split":
-			rc, err := router.Dial(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
+			rc, err := dialRouter(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
 			if err != nil {
 				return err
 			}
@@ -373,7 +373,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 				return err
 			}
 			if !*dryRun {
-				rc, err := router.Dial(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
+				rc, err := dialRouter(ctx, os.Getenv("ROUTER_URL"), os.Getenv("ROUTER_TOKEN"))
 				if err != nil {
 					return err
 				}
@@ -987,7 +987,7 @@ func pipelineTools(ctx context.Context, workers int, withCheck bool) (pipeline.T
 		return t, fmt.Errorf("ROUTER_URL and ROUTER_TOKEN are required")
 	}
 	t.Model = func(ctx context.Context) (router.Chatter, func(), error) {
-		rc, err := router.Dial(ctx, url, token)
+		rc, err := dialRouter(ctx, url, token)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1010,4 +1010,15 @@ func stage(ctx context.Context, c *catalog.Catalog, withCheck bool) (*extract.St
 		st.Checker = t
 	}
 	return st, nil
+}
+
+// dialRouter connects to the router as the site in LIBRARIAN_PUBLIC_URL, so
+// the router's journal and the providers see lib.wildcar.ru, not the router.
+func dialRouter(ctx context.Context, url, token string) (*router.Client, error) {
+	rc, err := router.Dial(ctx, url, token)
+	if err != nil {
+		return nil, err
+	}
+	rc.SetApp(os.Getenv("LIBRARIAN_PUBLIC_URL"))
+	return rc, nil
 }

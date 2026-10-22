@@ -37,6 +37,7 @@ type Chatter interface {
 // Client is a connected router session.
 type Client struct {
 	session *mcp.ClientSession
+	appURL  string
 }
 
 type bearer struct {
@@ -66,6 +67,11 @@ func Dial(ctx context.Context, endpoint, token string) (*Client, error) {
 	return &Client{session: s}, nil
 }
 
+// SetApp names the site the requests come from (app_url, e.g.
+// https://lib.wildcar.ru): the router logs it and passes it to providers.
+// Unset, the router records the requests as its own.
+func (c *Client) SetApp(url string) { c.appURL = url }
+
 // Close ends the session.
 func (c *Client) Close() error { return c.session.Close() }
 
@@ -77,6 +83,9 @@ func (c *Client) Chat(ctx context.Context, r ChatRequest) (ChatReply, error) {
 		"model_id":         r.Model,
 		"text":             r.Text,
 		"params":           map[string]any{"temperature": 0},
+	}
+	if c.appURL != "" {
+		args["app_url"] = c.appURL
 	}
 	if len(r.ImagesB64) > 0 {
 		args["images_b64"] = r.ImagesB64

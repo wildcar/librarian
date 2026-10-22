@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Router calls name lib.wildcar.ru
+- What: `chat` calls carry `app_url` from `LIBRARIAN_PUBLIC_URL`; every CLI and worker connection goes through `dialRouter`.
+- Why: the router showed librarian's requests under https://mr.wildcar.org, its own address, because no `app_url` was sent.
+- Files: internal/router/{router,app_test}.go, cmd/librarian/main.go
+- Next: owner checks the router journal.
+
 ## 2026-10-22 · Word and Excel files are read
 - What: .docx and .xlsx read in Go (tables as «cell | cell», sheets by name, dates from number formats), .doc by catdoc, .xls by python3-xlrd; stored as text pages like plain text, no model, no cost; migration 21 retries files set aside as unsupported.
 - Why: owner keeps documents in Word and Excel; they were listed as «не читаются».

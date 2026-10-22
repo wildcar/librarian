@@ -145,7 +145,7 @@ See `AGENTS/STATE.md` for the live Now / Next snapshot.
 ## Data sources & dependencies
 
 - model-router-mcp: `https://mr.wildcar.org/mcp/` over Streamable HTTP, Bearer auth; every call carries
-  `external_user_id="librarian:<account_id>"` (per-account spend; the bench tools use plain `librarian`) and `app_name="librarian"`.
+  `external_user_id="librarian:<account_id>"` (per-account spend; the bench tools use plain `librarian`), `app_name="librarian"` and `app_url` = `LIBRARIAN_PUBLIC_URL` (`https://lib.wildcar.ru`); without `app_url` the router records the requests as its own site.
 - Cloud sources: Yandex Disk, Google Drive, Nextcloud — shared-folder links, read-only.
 - poppler command-line tools (`pdftotext`, `pdftoppm`): `poppler-utils` on Linux.
 - tesseract 5 with the `rus` and `eng` languages: `tesseract-ocr`, `tesseract-ocr-rus` on Linux.
