@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Short document titles; shorter login texts
+- What: a `title` stage after the summary names each document in 2–6 words from the summary (catalog migration 14, `texts.title`, reset when the summary changes); the tree, the document page and MCP use it; login and «Проверьте почту» texts shortened; a year-less date showed as «16.--09».
+- Why: owner found list captions long and uneven («Это …», dates in three formats, «оформленные в частной клинике»).
+- Files: internal/titling/, internal/catalog/{titles,texts,shelf,persons}.go, internal/pipeline/pipeline.go, internal/web/, internal/mcpserver/server.go
+- Next: DOCX/XLSX; archives.
+
 ## 2026-10-22 · Plain text files are read; uploads keep their name
 - What: `text/plain` originals (.txt, .md, .csv) become pages as they are (UTF-8 or Windows-1251, ~3500-character pages at paragraph breaks); catalog migration 13 puts unsupported text files back to extraction and adds `sources.name`; the document page lists its files, «Пачки» names the files not read.
 - Why: owner's notes (ChatGPT answers as .md) were left out of search; uploaded files were known only by hash.

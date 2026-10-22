@@ -12,6 +12,7 @@ type ShelfDoc struct {
 	Partial string
 	Pages   int
 	Summary string
+	Title   string // "" until made
 	Persons []string
 	Attrs   map[string][]string
 }
@@ -20,7 +21,7 @@ type ShelfDoc struct {
 // persons and characteristics, in three queries whatever the account's size.
 func (c *Catalog) Shelf(ctx context.Context) ([]ShelfDoc, error) {
 	rows, err := c.db.QueryContext(ctx, `
-		SELECT d.id, COALESCE(t.doc_date, ''), COALESCE(t.doc_date_partial, ''), d.last_page - d.first_page + 1, COALESCE(t.summary, '')
+		SELECT d.id, COALESCE(t.doc_date, ''), COALESCE(t.doc_date_partial, ''), d.last_page - d.first_page + 1, COALESCE(t.summary, ''), COALESCE(t.title, '')
 		FROM documents d JOIN texts t ON t.doc_id = d.id
 		WHERE t.status IN ('done', 'flagged')
 		ORDER BY COALESCE(t.doc_date, '') DESC, d.id`)
@@ -31,7 +32,7 @@ func (c *Catalog) Shelf(ctx context.Context) ([]ShelfDoc, error) {
 	at := map[string]int{}
 	for rows.Next() {
 		var d ShelfDoc
-		if err := rows.Scan(&d.ID, &d.Date, &d.Partial, &d.Pages, &d.Summary); err != nil {
+		if err := rows.Scan(&d.ID, &d.Date, &d.Partial, &d.Pages, &d.Summary, &d.Title); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("shelf: %w", err)
 		}

@@ -11,7 +11,7 @@
 {{else}}Всё обработано.{{end}}
 {{range .Folders}}<br>В очереди на приём: {{.}}{{end}}
 {{if .LastFolder}}<br><span class="muted">Последний приём папки: {{.LastFolder}}</span>{{end}}
-{{if and .Pending.Any (ne .State "running")}}<br><span class="muted">Ждут: файлов {{.Pending.Originals}}, разбивки {{.Pending.Split}}, резюме {{.Pending.Texts}}, дат {{.Pending.Dates}}.</span>{{end}}
+{{if and .Pending.Any (ne .State "running")}}<br><span class="muted">Ждут: файлов {{.Pending.Originals}}, разбивки {{.Pending.Split}}, резюме {{.Pending.Texts}}, дат {{.Pending.Dates}}, названий {{.Pending.Titles}}.</span>{{end}}
 </div>{{if or (eq .State "running") .Pending.Any .Folders}}<script>setTimeout(function(){location.reload()},10000)</script>{{end}}{{end}}
 {{if .Batches}}<table class="list">
 <tr><th>№</th><th>Пачка</th><th>Чьи, характеристики</th><th>Готовность</th></tr>

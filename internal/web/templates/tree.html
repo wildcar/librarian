@@ -16,6 +16,6 @@
 {{define "node"}}{{range .Nodes}}<details{{if .None}} class="none"{{end}}><summary>{{.Label}} <span class="count">{{.Count}}</span></summary>
 {{template "node" .}}</details>
 {{end}}{{if .Docs}}<ul class="docs">
-{{range .Docs}}<li><span class="d">{{date .Date .Partial}}</span><span><a href="/doc/{{.ID}}">{{title .Summary}}</a>
+{{range .Docs}}<li><span class="d">{{date .Date .Partial}}</span><span><a href="/doc/{{.ID}}">{{if .Title}}{{.Title}}{{else}}{{title .Summary}}{{end}}</a>
 {{range $k, $vs := .Attrs}}{{range $vs}}<span class="chip">{{$k}}: {{.}}</span>{{end}}{{end}}</span></li>
 {{end}}</ul>{{end}}{{end}}

@@ -38,6 +38,7 @@ attrs=["ключ=значение"] требует все пары, batch — д
 date_from/date_to — документы в периоде или без даты; так же missing=["person"] и person, а любой
 другой ключ в missing — характеристика с этим ключом (вместе с attrs по нему — значение или её нет).
 Если в документе нет однозначного ответа, так и скажи, не додумывай.
+title — короткое название документа для списка, summary — его резюме.
 По умолчанию отдаются только резюме без персональных данных. Суть документа (layer=essential) и
 дословный текст (layer=verbatim) запрашивай, только если резюме не хватает для ответа: в них есть
 имена, номера и названия организаций. review перечисляет, что владелец ещё не проверил
@@ -267,6 +268,7 @@ type docOut struct {
 	DatePartial string              `json:"date_partial,omitempty"`
 	Persons     []string            `json:"persons"`
 	Pages       int                 `json:"pages"`
+	Title       string              `json:"title,omitempty"`
 	Summary     string              `json:"summary"`
 	Attrs       map[string][]string `json:"attrs,omitempty"`
 	Batches     []int64             `json:"batches,omitempty"`
@@ -308,7 +310,7 @@ func (t *tools) search(ctx context.Context, _ *mcp.CallToolRequest, in searchIn)
 	out := searchOut{Total: total, Documents: []docOut{}}
 	for _, h := range hits {
 		out.Documents = append(out.Documents, docOut{ID: h.DocID, Date: h.Date, DatePartial: h.Partial, Persons: nonNil(h.Persons),
-			Pages: h.Pages, Summary: h.Summary, Attrs: h.Attrs, Batches: h.Batches, Review: nonNil(h.Review)})
+			Pages: h.Pages, Title: h.Title, Summary: h.Summary, Attrs: h.Attrs, Batches: h.Batches, Review: nonNil(h.Review)})
 	}
 	if next := in.Offset + len(hits); len(hits) > 0 && next < total {
 		out.NextOffset = next
@@ -425,6 +427,7 @@ type getOut struct {
 	DateSource  string              `json:"date_source,omitempty"`
 	Persons     []string            `json:"persons"`
 	Pages       int                 `json:"pages"`
+	Title       string              `json:"title,omitempty"`
 	Layer       string              `json:"layer"`
 	Text        string              `json:"text"`
 	Attrs       map[string][]string `json:"attrs,omitempty"`
@@ -465,7 +468,7 @@ func (t *tools) get(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp
 		return nil, getOut{}, err
 	}
 	out := getOut{ID: d.ID, Date: date, DatePartial: partial, DateSource: catalog.DateSourceLabel(source), Persons: nonNil(persons),
-		Pages: d.LastPage - d.FirstPage + 1, Layer: layer, Attrs: attrs, Batches: batches, Review: nonNil(review)}
+		Pages: d.LastPage - d.FirstPage + 1, Title: tx.Title, Layer: layer, Attrs: attrs, Batches: batches, Review: nonNil(review)}
 	switch layer {
 	case "summary":
 		out.Text = tx.Summary

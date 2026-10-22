@@ -1,7 +1,7 @@
 {{template "head" "Вход"}}{{template "bar"}}
 <main><div class="narrow card">
 <h1>Вход</h1>
-<p class="muted">Введите почту аккаунта: мы пришлём ссылку для входа. Пароля нет.</p>
+<p class="muted">Введите почту аккаунта:</p>
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 <form method="post" action="/login">
 <p><input type="email" name="email" value="{{.Email}}" placeholder="you@example.org" required autofocus autocomplete="email"></p>

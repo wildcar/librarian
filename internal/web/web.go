@@ -441,7 +441,10 @@ func (s *Server) document(w http.ResponseWriter, r *http.Request, v viewer) {
 		s.render(w, "message", map[string]any{"V": v, "Title": "Нет такого документа", "Text": "В вашей библиотеке нет документа " + id + "."})
 		return
 	}
-	p := docPage{ID: d.ID, Title: Title(tx.Summary), Summary: tx.Summary, Essential: tx.Essential, Pages: d.LastPage - d.FirstPage + 1}
+	p := docPage{ID: d.ID, Title: tx.Title, Summary: tx.Summary, Essential: tx.Essential, Pages: d.LastPage - d.FirstPage + 1}
+	if p.Title == "" {
+		p.Title = Title(tx.Summary)
+	}
 	if p.Date, p.Partial, p.DateSource, err = v.Cat.DocDateOf(ctx, id); err != nil {
 		s.fail(w, err)
 		return
@@ -551,12 +554,12 @@ func shownDate(date, partial string) string {
 	switch {
 	case date != "":
 		return ruDate(date)
+	case strings.HasPrefix(partial, "--") && len(partial) == 7:
+		return partial[5:7] + "." + partial[2:4] + ", год неизвестен"
 	case len(partial) == 7:
 		return partial[5:7] + "." + partial[:4]
 	case len(partial) == 4:
 		return partial + " г."
-	case strings.HasPrefix(partial, "--") && len(partial) == 7:
-		return partial[5:7] + "." + partial[2:4] + ", год неизвестен"
 	}
 	return "без даты"
 }

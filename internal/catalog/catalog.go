@@ -224,6 +224,9 @@ var schema = []string{
 	`DELETE FROM extraction WHERE status = 'unsupported'
 		AND sha256 IN (SELECT sha256 FROM originals WHERE mime = 'text/plain');
 	ALTER TABLE sources ADD COLUMN name TEXT;`,
+	// 14: a short title made from the summary for lists; NULL until made,
+	// and again when the summary changes.
+	`ALTER TABLE texts ADD COLUMN title TEXT;`,
 }
 
 // Catalog is an open account catalog.

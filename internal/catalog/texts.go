@@ -21,6 +21,7 @@ type Texts struct {
 	Status             string
 	Essential          string
 	Summary            string
+	Title              string // short, made from the summary; "" until made
 	Removed            string // JSON
 	RestoredRepeats    int
 	RestoredSuspicious int
@@ -68,7 +69,8 @@ func (c *Catalog) SaveTexts(ctx context.Context, t Texts, at time.Time) error {
 		  summary = excluded.summary, removed = excluded.removed, restored_repeats = excluded.restored_repeats,
 		  restored_suspicious = excluded.restored_suspicious, flags = excluded.flags, error = excluded.error,
 		  model = excluded.model, cost_usd = texts.cost_usd + excluded.cost_usd,
-		  pipeline = excluded.pipeline, updated = excluded.updated`,
+		  pipeline = excluded.pipeline, updated = excluded.updated,
+		  title = CASE WHEN texts.summary IS excluded.summary THEN texts.title END`,
 		t.DocID, t.Status, t.Essential, t.Summary, t.Removed, t.RestoredRepeats, t.RestoredSuspicious,
 		t.Flags, t.Error, t.Model, t.CostUSD, t.Pipeline, at.UTC().Format(time.RFC3339Nano))
 	if err != nil {
@@ -92,10 +94,10 @@ func (c *Catalog) GetDocument(ctx context.Context, id string) (Document, Texts, 
 		return d, Texts{}, fmt.Errorf("get document %s: %w", id, err)
 	}
 	var t Texts
-	var ess, sum, rem, flags, e sql.NullString
-	err = c.db.QueryRowContext(ctx, `SELECT doc_id, status, essential, summary, removed, restored_repeats,
+	var ess, sum, title, rem, flags, e sql.NullString
+	err = c.db.QueryRowContext(ctx, `SELECT doc_id, status, essential, summary, title, removed, restored_repeats,
 		restored_suspicious, flags, error, model, cost_usd, pipeline FROM texts WHERE doc_id = ?`, id).
-		Scan(&t.DocID, &t.Status, &ess, &sum, &rem, &t.RestoredRepeats, &t.RestoredSuspicious, &flags, &e, &t.Model, &t.CostUSD, &t.Pipeline)
+		Scan(&t.DocID, &t.Status, &ess, &sum, &title, &rem, &t.RestoredRepeats, &t.RestoredSuspicious, &flags, &e, &t.Model, &t.CostUSD, &t.Pipeline)
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, Texts{}, nil
 	}
@@ -103,6 +105,7 @@ func (c *Catalog) GetDocument(ctx context.Context, id string) (Document, Texts, 
 		return d, t, fmt.Errorf("get document %s: %w", id, err)
 	}
 	t.Essential, t.Summary, t.Removed, t.Flags, t.Error = ess.String, sum.String, rem.String, flags.String, e.String
+	t.Title = title.String
 	return d, t, nil
 }
 

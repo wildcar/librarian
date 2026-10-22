@@ -216,6 +216,7 @@ type Hit struct {
 	Persons []string
 	Pages   int
 	Summary string
+	Title   string // "" until made
 	Attrs   map[string][]string
 	Batches []int64
 	Review  []string // what the owner still has to check; empty when nothing
@@ -316,7 +317,7 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 	}
 	limit = min(limit, 50)
 	rows, err := c.db.QueryContext(ctx, `
-		SELECT d.id, COALESCE(t.doc_date, ''), COALESCE(t.doc_date_partial, ''), d.last_page - d.first_page + 1, COALESCE(t.summary, '')`+cond+`
+		SELECT d.id, COALESCE(t.doc_date, ''), COALESCE(t.doc_date_partial, ''), d.last_page - d.first_page + 1, COALESCE(t.summary, ''), COALESCE(t.title, '')`+cond+`
 		ORDER BY `+order+fmt.Sprintf(" LIMIT %d OFFSET %d", limit, max(q.Offset, 0)), args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("search: %w", err)
@@ -325,7 +326,7 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 	var out []Hit
 	for rows.Next() {
 		var h Hit
-		if err := rows.Scan(&h.DocID, &h.Date, &h.Partial, &h.Pages, &h.Summary); err != nil {
+		if err := rows.Scan(&h.DocID, &h.Date, &h.Partial, &h.Pages, &h.Summary, &h.Title); err != nil {
 			return nil, 0, fmt.Errorf("search: %w", err)
 		}
 		out = append(out, h)

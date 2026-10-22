@@ -1,5 +1,5 @@
 // Package pipeline takes an account's new originals all the way to search
-// (ADR-0007): extract → split → digest → date → index, the stages the CLI
+// (ADR-0007): extract → split → digest → date → title → index, the stages the CLI
 // also runs one by one. It runs from `librarian run` and from the worker in
 // `librarian serve`; a lock file keeps two runs off one account.
 package pipeline
@@ -22,6 +22,7 @@ import (
 	"github.com/wildcar/librarian/internal/pages"
 	"github.com/wildcar/librarian/internal/router"
 	"github.com/wildcar/librarian/internal/split"
+	"github.com/wildcar/librarian/internal/titling"
 )
 
 // ErrBusy is returned when another run holds the account.
@@ -38,11 +39,11 @@ type Tools struct {
 
 // Pending counts the work waiting in each stage.
 type Pending struct {
-	Originals, Split, Texts, Dates int
+	Originals, Split, Texts, Dates, Titles int
 }
 
 // Any says whether there is anything to do.
-func (p Pending) Any() bool { return p.Originals+p.Split+p.Texts+p.Dates > 0 }
+func (p Pending) Any() bool { return p.Originals+p.Split+p.Texts+p.Dates+p.Titles > 0 }
 
 // Waiting counts what the stages have not done yet.
 func Waiting(ctx context.Context, c *catalog.Catalog) (Pending, error) {
@@ -63,7 +64,11 @@ func Waiting(ctx context.Context, c *catalog.Catalog) (Pending, error) {
 	if err != nil {
 		return p, err
 	}
-	return Pending{Originals: len(o), Split: len(s), Texts: len(t), Dates: len(d)}, nil
+	n, err := c.PendingTitles(ctx, 0)
+	if err != nil {
+		return p, err
+	}
+	return Pending{Originals: len(o), Split: len(s), Texts: len(t), Dates: len(d), Titles: len(n)}, nil
 }
 
 // Estimate is the expected OCR cost of the waiting originals, the bulk of
@@ -83,6 +88,7 @@ type Report struct {
 	Split   *split.Report
 	Digest  *layers.Report
 	Date    *dating.Report
+	Title   *titling.Report
 	Index   *index.Report
 	CostUSD float64
 	Errors  []string
@@ -160,6 +166,18 @@ func Run(ctx context.Context, a *account.Account, c *catalog.Catalog, t Tools, p
 		rep.CostUSD += rep.Date.CostUSD
 	}
 	note("дата", err, nil)
+	if ctx.Err() != nil {
+		return rep, ctx.Err()
+	}
+
+	progress("title")
+	tt := &titling.Stage{Catalog: c, Model: model}
+	rep.Title, err = tt.Run(ctx, titling.Options{Account: a.ID, Workers: workers})
+	if rep.Title != nil {
+		rep.CostUSD += rep.Title.CostUSD
+		note("название", nil, rep.Title.Notes)
+	}
+	note("название", err, nil)
 	if ctx.Err() != nil {
 		return rep, ctx.Err()
 	}
