@@ -12,7 +12,7 @@ an MCP server from any AI assistant.
 
 ## Now
 
-- Document page opens the original («Открыть файл», PDF at the document's page, served only while the hash matches); «Входящие» lists documents without a person and every open check, by kind. Tested, not yet deployed to `homesrv`.
+- Document page opens the original («Открыть файл», PDF at the document's page, served only while the hash matches); «Входящие» lists documents without a person and every open check, by kind. Deployed to `homesrv` 2026-10-22; not yet opened by the owner.
 - Server folders through the web (`/folder`): only inside the account's allowed roots; none set yet for `sergey`, and `librarian` may only traverse `/mnt/raid/document/Сережа`.
 - Uploads through the web (`/upload`, ADR-0007): files become a labelled batch, the worker in `serve` takes them to search (auto up to $1 OCR estimate, else «Обработать» on `/batches`); `librarian run` does the same from the CLI. Checked live on a throwaway account.
 - Assistants connect to `https://lib.wildcar.ru/mcp` by OAuth (ADR-0007): the letter names the assistant, «Ассистенты» lists and disconnects them, edits are signed with the assistant's name; checked live up to the authorization page, a real assistant not connected yet.
