@@ -136,7 +136,11 @@ func one(ctx context.Context, c *catalog.Catalog, persons []catalog.Person, e ca
 		if taken[a.Key] || rejected.Rejects(a) {
 			continue
 		}
-		if err := c.SetDocAttr(ctx, e.DocID, a, catalog.SourceModel); err != nil {
+		src := catalog.SourceModel
+		if e.Guessed[a.Key] {
+			src = catalog.SourceModelGuess
+		}
+		if err := c.SetDocAttr(ctx, e.DocID, a, src); err != nil {
 			return err
 		}
 	}

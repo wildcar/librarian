@@ -249,7 +249,7 @@ func (c *Catalog) ClearDerived(ctx context.Context, docID string) error {
 	if _, err := c.db.ExecContext(ctx, "DELETE FROM doc_persons WHERE doc_id = ? AND method IN ('rule', 'batch')", docID); err != nil {
 		return err
 	}
-	_, err := c.db.ExecContext(ctx, "DELETE FROM doc_attrs WHERE doc_id = ? AND (source LIKE 'batch:%' OR source = 'model')", docID)
+	_, err := c.db.ExecContext(ctx, "DELETE FROM doc_attrs WHERE doc_id = ? AND (source LIKE 'batch:%' OR source IN ('model', 'model:guess'))", docID)
 	return err
 }
 

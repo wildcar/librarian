@@ -234,6 +234,13 @@ var schema = []string{
 	// 16: the author's specialty is read from the essential text too, so
 	// every document is described again.
 	`UPDATE texts SET title = NULL;`,
+	// 17: the model may guess a specialty from the content; which keys are
+	// guesses (JSON list). Every document is described again.
+	`ALTER TABLE texts ADD COLUMN model_guessed TEXT;
+	UPDATE texts SET title = NULL;`,
+	// 18: standard names for diagnostic specialties; a guess stays out of the
+	// title. Every document is described again.
+	`UPDATE texts SET title = NULL;`,
 }
 
 // Catalog is an open account catalog.

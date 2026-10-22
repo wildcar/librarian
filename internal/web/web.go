@@ -84,6 +84,8 @@ func New(cfg Config) (*Server, error) {
 				return "правка ассистента, ждёт подтверждения"
 			case src == catalog.SourceModel:
 				return "модель прочитала из текста документа"
+			case src == catalog.SourceModelGuess:
+				return "в документе не написано: модель угадала по содержанию"
 			case strings.HasPrefix(src, "batch:"):
 				return "от пачки №" + strings.TrimPrefix(src, "batch:")
 			}

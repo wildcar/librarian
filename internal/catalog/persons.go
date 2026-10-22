@@ -115,10 +115,20 @@ type IndexEntry struct {
 	LastPage   int
 	Summary    string
 	Essential  string
-	ModelAttrs []Attr // read by the model from the summary
+	ModelAttrs []Attr          // read by the model from the summary
+	Guessed    map[string]bool // of ModelAttrs, keys the model guessed
 }
 
-func (e *IndexEntry) setModelAttrs(js string) {
+func (e *IndexEntry) setModelAttrs(js, guessed string) {
+	var keys []string
+	if json.Unmarshal([]byte(guessed), &keys) == nil {
+		for _, k := range keys {
+			if e.Guessed == nil {
+				e.Guessed = map[string]bool{}
+			}
+			e.Guessed[k] = true
+		}
+	}
 	var m map[string][]string
 	if json.Unmarshal([]byte(js), &m) != nil {
 		return
@@ -134,7 +144,7 @@ func (e *IndexEntry) setModelAttrs(js string) {
 // IndexEntries lists every document that has text layers.
 func (c *Catalog) IndexEntries(ctx context.Context) ([]IndexEntry, error) {
 	rows, err := c.db.QueryContext(ctx, `
-		SELECT d.id, d.sha256, d.first_page, d.last_page, COALESCE(t.summary, ''), COALESCE(t.essential, ''), COALESCE(t.model_attrs, '')
+		SELECT d.id, d.sha256, d.first_page, d.last_page, COALESCE(t.summary, ''), COALESCE(t.essential, ''), COALESCE(t.model_attrs, ''), COALESCE(t.model_guessed, '')
 		FROM documents d JOIN texts t ON t.doc_id = d.id WHERE t.status IN ('done', 'flagged')
 		ORDER BY d.id`)
 	if err != nil {
@@ -144,11 +154,11 @@ func (c *Catalog) IndexEntries(ctx context.Context) ([]IndexEntry, error) {
 	var out []IndexEntry
 	for rows.Next() {
 		var e IndexEntry
-		var js string
-		if err := rows.Scan(&e.DocID, &e.SHA256, &e.FirstPage, &e.LastPage, &e.Summary, &e.Essential, &js); err != nil {
+		var js, guessed string
+		if err := rows.Scan(&e.DocID, &e.SHA256, &e.FirstPage, &e.LastPage, &e.Summary, &e.Essential, &js, &guessed); err != nil {
 			return nil, fmt.Errorf("index entries: %w", err)
 		}
-		e.setModelAttrs(js)
+		e.setModelAttrs(js, guessed)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -157,15 +167,15 @@ func (c *Catalog) IndexEntries(ctx context.Context) ([]IndexEntry, error) {
 // IndexEntryOf returns the index entry of one document with text layers.
 func (c *Catalog) IndexEntryOf(ctx context.Context, docID string) (IndexEntry, error) {
 	var e IndexEntry
-	var js string
+	var js, guessed string
 	err := c.db.QueryRowContext(ctx, `
-		SELECT d.id, d.sha256, d.first_page, d.last_page, COALESCE(t.summary, ''), COALESCE(t.essential, ''), COALESCE(t.model_attrs, '')
+		SELECT d.id, d.sha256, d.first_page, d.last_page, COALESCE(t.summary, ''), COALESCE(t.essential, ''), COALESCE(t.model_attrs, ''), COALESCE(t.model_guessed, '')
 		FROM documents d JOIN texts t ON t.doc_id = d.id WHERE d.id = ? AND t.status IN ('done', 'flagged')`, docID).
-		Scan(&e.DocID, &e.SHA256, &e.FirstPage, &e.LastPage, &e.Summary, &e.Essential, &js)
+		Scan(&e.DocID, &e.SHA256, &e.FirstPage, &e.LastPage, &e.Summary, &e.Essential, &js, &guessed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, fmt.Errorf("%w: %s", ErrNoDocument, docID)
 	}
-	e.setModelAttrs(js)
+	e.setModelAttrs(js, guessed)
 	return e, err
 }
 
@@ -237,6 +247,7 @@ type Hit struct {
 	Summary string
 	Title   string // "" until made
 	Attrs   map[string][]string
+	Guessed []string // of Attrs, "key=value" the model guessed from the content
 	Batches []int64
 	Review  []string // what the owner still has to check; empty when nothing
 }
@@ -358,6 +369,9 @@ func (c *Catalog) Search(ctx context.Context, q SearchQuery) ([]Hit, int, error)
 			return nil, 0, err
 		}
 		if out[i].Attrs, err = c.DocAttrs(ctx, out[i].DocID); err != nil {
+			return nil, 0, err
+		}
+		if out[i].Guessed, err = c.DocGuesses(ctx, out[i].DocID); err != nil {
 			return nil, 0, err
 		}
 		if out[i].Batches, err = c.DocBatches(ctx, out[i].DocID); err != nil {

@@ -39,10 +39,10 @@ const maxValueRunes = 40
 // Prompt is general on purpose: the library holds any documents, medicine is
 // only the first example.
 const Prompt = `Ниже резюме документа и его суть (текст без служебных строк). Ответь только JSON:
-{"title": "...", "вид": "...", "специальность": "..." или null, "организация": "..." или null}
-- title — короткое название для списка, 2–6 слов: вид документа и, если есть, кто его составил по специальности или о чём он: «Рекомендации уролога по лечению», «Суточное мониторирование ЭКГ», «Протокол гастроскопии», «Дополнительное соглашение к договору», «Выписка по счёту». Без даты, без слов «это», «документ», «оформленный», «выданный», без организации и её типа, без имён и номеров. С большой буквы, без точки и кавычек.
+{"title": "...", "вид": "...", "специальность": "..." или null, "специальность_догадка": true или false, "организация": "..." или null}
+- title — короткое название для списка, 2–6 слов: вид документа и, если есть, кто его составил по специальности или о чём он: «Рекомендации уролога по лечению», «Суточное мониторирование ЭКГ», «Протокол гастроскопии», «Дополнительное соглашение к договору», «Выписка по счёту». Специальность в title — только если она написана в документе, не догадка. Без даты, без слов «это», «документ», «оформленный», «выданный», без организации и её типа, без имён и номеров. С большой буквы, без точки и кавычек.
 - вид — вид документа, 1–3 слова с маленькой буквы, как раздел в картотеке: «рекомендации», «протокол исследования», «заключение», «анализ», «выписка», «договор», «дополнительное соглашение», «счёт», «чек», «справка», «направление», «рецепт».
-- специальность — специальность врача или специалиста, который составил документ или провёл исследование, одним-двумя словами с маленькой буквы: «уролог», «гастроэнтеролог», «кардиолог». Ищи её в подписи, должности автора, названии приёма или отделения («Приём уролога», «Врач-эндокринолог»). Врачи, к которым документ направляет («консультация гастроэнтеролога»), — не автор. null, если автор не назван.
+- специальность — специальность врача или специалиста, который составил документ или провёл исследование, одним-двумя словами с маленькой буквы: «уролог», «гастроэнтеролог», «кардиолог»; для исследований — по их виду: «врач ультразвуковой диагностики» (УЗИ, УЗДС), «врач функциональной диагностики» (ЭКГ, холтер, СМАД), «эндоскопист», «рентгенолог» (рентген, КТ, МРТ), «патологоанатом» (гистология). Ищи её в подписи, должности автора, названии приёма или отделения («Приём уролога», «Врач-эндокринолог»). Врачи, к которым документ направляет («консультация гастроэнтеролога»), — не автор. Если автор назван — "специальность_догадка": false. Если специальность автора не написана, но по содержанию видно, какой специалист составил документ (назначения по диабету и повторная явка к эндокринологу — эндокринолог), дай её и поставь "специальность_догадка": true. Если и по содержанию не ясно — null.
 - организация — только тип организации, откуда документ, с маленькой буквы: «частная клиника», «государственная больница», «лаборатория», «банк», «страховая компания»; null, если не назван.
 Не додумывай: чего нет в тексте, то null. Никаких имён, фамилий и названий организаций ни в одном поле.
 `
@@ -108,9 +108,9 @@ func (s *Stage) Run(ctx context.Context, o Options) (*Report, error) {
 			go func() {
 				defer wg.Done()
 				defer func() { <-sem }()
-				title, attrs, cost, err := s.one(ctx, o, prompt, d, layers.Forbidden(d.Essential, extra...))
+				desc, cost, err := s.one(ctx, o, prompt, d, layers.Forbidden(d.Essential, extra...))
 				if err == nil {
-					err = s.Catalog.SaveDescription(ctx, d.DocID, d.Summary, title, attrs)
+					err = s.Catalog.SaveDescription(ctx, d.DocID, d.Summary, desc)
 				}
 				mu.Lock()
 				defer mu.Unlock()
@@ -136,15 +136,14 @@ const essentialRunes = 6000
 // one describes a document: one retry when the answer leaks a name, then
 // whatever still leaks is dropped — the title falls back to the summary's
 // first sentence, a value is left out.
-func (s *Stage) one(ctx context.Context, o Options, prompt string, d catalog.DescribeInput, forbidden []string) (string, map[string][]string, float64, error) {
+func (s *Stage) one(ctx context.Context, o Options, prompt string, d catalog.DescribeInput, forbidden []string) (catalog.Description, float64, error) {
 	ess := d.Essential
 	if r := []rune(ess); len(r) > essentialRunes {
 		ess = string(r[:essentialRunes/2]) + "\n…\n" + string(r[len(r)-essentialRunes/2:])
 	}
 	input := "\nРезюме:\n" + d.Summary + "\n\nСуть:\n" + ess
 	var cost float64
-	var title string
-	var attrs map[string][]string
+	var desc catalog.Description
 	var leaks []string
 	for attempt := 0; attempt < 2; attempt++ {
 		p := prompt
@@ -154,25 +153,26 @@ func (s *Stage) one(ctx context.Context, o Options, prompt string, d catalog.Des
 		reply, err := s.Model.Chat(ctx, router.ChatRequest{Account: o.Account, Model: o.Model, Text: p + input})
 		cost += reply.CostUSD
 		if err != nil {
-			return "", nil, cost, err
+			return desc, cost, err
 		}
-		if title, attrs, err = Parse(reply.Text); err != nil {
-			return "", nil, cost, err
+		if desc, err = Parse(reply.Text); err != nil {
+			return desc, cost, err
 		}
-		leaks = layers.Leaks(title+" "+joinValues(attrs), forbidden)
+		leaks = layers.Leaks(desc.Title+" "+joinValues(desc.Attrs), forbidden)
 		if len(leaks) == 0 {
-			return title, attrs, cost, nil
+			return desc, cost, nil
 		}
 	}
-	if len(layers.Leaks(title, forbidden)) > 0 {
-		title = FromSummary(d.Summary)
+	if len(layers.Leaks(desc.Title, forbidden)) > 0 {
+		desc.Title = FromSummary(d.Summary)
 	}
-	for k, vs := range attrs {
+	for k, vs := range desc.Attrs {
 		if len(layers.Leaks(strings.Join(vs, " "), forbidden)) > 0 {
-			delete(attrs, k)
+			delete(desc.Attrs, k)
+			delete(desc.Guessed, k)
 		}
 	}
-	return title, attrs, cost, nil
+	return desc, cost, nil
 }
 
 func joinValues(attrs map[string][]string) string {
@@ -217,16 +217,21 @@ func usedValues(known map[string][]string) string {
 
 var jsonObject = regexp.MustCompile(`(?s)\{.*\}`)
 
-// Parse reads the model's answer: a title and the characteristics it named.
-func Parse(answer string) (string, map[string][]string, error) {
+// Parse reads the model's answer: a title, the characteristics it named and
+// which of them are guesses.
+// Guessable are the keys the model may give as a guess from the content
+// («<key>_догадка»: true); the guess is stored apart and shown as one.
+var Guessable = []string{"специальность"}
+
+func Parse(answer string) (catalog.Description, error) {
 	var raw map[string]any
 	if err := json.Unmarshal([]byte(jsonObject.FindString(answer)), &raw); err != nil {
-		return "", nil, fmt.Errorf("ответ не JSON: %.80q", answer)
+		return catalog.Description{}, fmt.Errorf("ответ не JSON: %.80q", answer)
 	}
 	t, _ := raw["title"].(string)
 	title := Clean(t)
 	if title == "" {
-		return "", nil, fmt.Errorf("нет названия: %.80q", answer)
+		return catalog.Description{}, fmt.Errorf("нет названия: %.80q", answer)
 	}
 	attrs := map[string][]string{}
 	for _, k := range Keys {
@@ -238,7 +243,13 @@ func Parse(answer string) (string, map[string][]string, error) {
 			attrs[k] = []string{v}
 		}
 	}
-	return title, attrs, nil
+	guessed := map[string]bool{}
+	for _, k := range Guessable {
+		if g, _ := raw[k+"_догадка"].(bool); g && attrs[k] != nil {
+			guessed[k] = true
+		}
+	}
+	return catalog.Description{Title: title, Attrs: attrs, Guessed: guessed}, nil
 }
 
 // properName says whether a value has a word after the first written like a

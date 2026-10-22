@@ -71,7 +71,8 @@ func (c *Catalog) SaveTexts(ctx context.Context, t Texts, at time.Time) error {
 		  model = excluded.model, cost_usd = texts.cost_usd + excluded.cost_usd,
 		  pipeline = excluded.pipeline, updated = excluded.updated,
 		  title = CASE WHEN texts.summary IS excluded.summary THEN texts.title END,
-		  model_attrs = CASE WHEN texts.summary IS excluded.summary THEN texts.model_attrs END`,
+		  model_attrs = CASE WHEN texts.summary IS excluded.summary THEN texts.model_attrs END,
+		  model_guessed = CASE WHEN texts.summary IS excluded.summary THEN texts.model_guessed END`,
 		t.DocID, t.Status, t.Essential, t.Summary, t.Removed, t.RestoredRepeats, t.RestoredSuspicious,
 		t.Flags, t.Error, t.Model, t.CostUSD, t.Pipeline, at.UTC().Format(time.RFC3339Nano))
 	if err != nil {

@@ -9,6 +9,7 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 - Why: owner wants to find and group documents by kind and specialty, not only by person and year.
 - Files: internal/describe/, internal/catalog/{titles,persons,shelf,batches}.go, internal/index/index.go, internal/web/, internal/mcpserver/server.go
 - Then: the summary rarely names the author, so the specialty was missing or guessed from referrals; `describe` also reads the essential text (migration 16 describes again) with the summary's leak checks on the title and values.
+- Then: owner asked for the specialty to be guessed from the content when not written, marked as a guess (migration 17, `model:guess`, «догадка», MCP `guessed`).
 - Next: the original file on the document page; the inbox.
 
 ## 2026-10-22 · Short document titles; shorter login texts

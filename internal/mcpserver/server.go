@@ -34,7 +34,8 @@ search_documents ищет по словам и фильтрует по чело�
 угадано, фильтры по датам такой документ считают документом без даты.
 attrs — характеристики документа (ключ → значения), открытый набор: у разных документов он разный.
 Владелец задаёт их пачке документов, присланных вместе (batches — номера пачек); вид, специальность
-и организация (только её тип) библиотека читает из текста сама, если владелец их не задал. Фильтр
+и организация (только её тип) библиотека читает из текста сама, если владелец их не задал;
+guessed — те из них, что в документе не написаны и угаданы по содержанию: говори о них как о догадке. Фильтр
 attrs=["ключ=значение"] требует все пары, batch — документы одной пачки. missing=["date"] без фильтра по дате находит документы без даты, а вместе с
 date_from/date_to — документы в периоде или без даты; так же missing=["person"] и person, а любой
 другой ключ в missing — характеристика с этим ключом (вместе с attrs по нему — значение или её нет).
@@ -272,6 +273,7 @@ type docOut struct {
 	Title       string              `json:"title,omitempty"`
 	Summary     string              `json:"summary"`
 	Attrs       map[string][]string `json:"attrs,omitempty"`
+	Guessed     []string            `json:"guessed,omitempty"`
 	Batches     []int64             `json:"batches,omitempty"`
 	Review      []string            `json:"review"`
 }
@@ -311,7 +313,7 @@ func (t *tools) search(ctx context.Context, _ *mcp.CallToolRequest, in searchIn)
 	out := searchOut{Total: total, Documents: []docOut{}}
 	for _, h := range hits {
 		out.Documents = append(out.Documents, docOut{ID: h.DocID, Date: h.Date, DatePartial: h.Partial, Persons: nonNil(h.Persons),
-			Pages: h.Pages, Title: h.Title, Summary: h.Summary, Attrs: h.Attrs, Batches: h.Batches, Review: nonNil(h.Review)})
+			Pages: h.Pages, Title: h.Title, Summary: h.Summary, Attrs: h.Attrs, Guessed: h.Guessed, Batches: h.Batches, Review: nonNil(h.Review)})
 	}
 	if next := in.Offset + len(hits); len(hits) > 0 && next < total {
 		out.NextOffset = next
@@ -432,6 +434,7 @@ type getOut struct {
 	Layer       string              `json:"layer"`
 	Text        string              `json:"text"`
 	Attrs       map[string][]string `json:"attrs,omitempty"`
+	Guessed     []string            `json:"guessed,omitempty"`
 	Batches     []int64             `json:"batches,omitempty"`
 	Review      []string            `json:"review"`
 }
@@ -468,7 +471,11 @@ func (t *tools) get(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp
 	if err != nil {
 		return nil, getOut{}, err
 	}
-	out := getOut{ID: d.ID, Date: date, DatePartial: partial, DateSource: catalog.DateSourceLabel(source), Persons: nonNil(persons),
+	guessed, err := t.cat.DocGuesses(ctx, d.ID)
+	if err != nil {
+		return nil, getOut{}, err
+	}
+	out := getOut{ID: d.ID, Guessed: guessed, Date: date, DatePartial: partial, DateSource: catalog.DateSourceLabel(source), Persons: nonNil(persons),
 		Pages: d.LastPage - d.FirstPage + 1, Title: tx.Title, Layer: layer, Attrs: attrs, Batches: batches, Review: nonNil(review)}
 	switch layer {
 	case "summary":

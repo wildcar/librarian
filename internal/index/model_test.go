@@ -28,11 +28,18 @@ func TestModelAttrsRankLast(t *testing.T) {
 	plain := doc(t, c, sha("1"), "Рекомендации")
 	batched := doc(t, c, sha("2"), "Рекомендации")
 	owned := doc(t, c, sha("3"), "Рекомендации")
-	model := map[string][]string{"вид": {"рекомендации"}, "специальность": {"уролог"}}
+	model := catalog.Description{Title: "Рекомендации уролога",
+		Attrs: map[string][]string{"вид": {"рекомендации"}, "специальность": {"уролог"}}}
 	for _, id := range []string{plain, batched, owned} {
-		if err := c.SaveDescription(ctx, id, "Документ.", "Рекомендации уролога", model); err != nil {
+		if err := c.SaveDescription(ctx, id, "Документ.", model); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// The model guessed the specialty of one document.
+	guessed := doc(t, c, sha("4"), "Рекомендации")
+	model.Guessed = map[string]bool{"специальность": true}
+	if err := c.SaveDescription(ctx, guessed, "Документ.", model); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := c.CreateBatch(ctx, catalog.Batch{Kind: "upload", Attrs: []catalog.Attr{{Key: "специальность", Value: "андролог"}}},
 		[]string{sha("2")}, now); err != nil {
@@ -59,10 +66,14 @@ func TestModelAttrsRankLast(t *testing.T) {
 		plain:   "вид=рекомендации@model специальность=уролог@model",
 		batched: "вид=рекомендации@model специальность=андролог@batch:1",
 		owned:   "специальность=уролог@model",
+		guessed: "вид=рекомендации@model специальность=уролог@model:guess",
 	} {
 		if got := attrs(id); got != want {
 			t.Errorf("%s: %s, want %s", id, got, want)
 		}
+	}
+	if g, err := c.DocGuesses(ctx, guessed); err != nil || strings.Join(g, " ") != "специальность=уролог" {
+		t.Errorf("guesses: %v, %v", g, err)
 	}
 	// Indexing again changes nothing.
 	if _, err := index.Run(ctx, c, now); err != nil {

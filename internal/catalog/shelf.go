@@ -77,7 +77,7 @@ func (c *Catalog) Shelf(ctx context.Context) ([]ShelfDoc, error) {
 		}
 		if i, ok := at[id]; ok {
 			out[i].Attrs[k] = append(out[i].Attrs[k], v)
-			if src != SourceModel {
+			if !ByModel(src) {
 				if out[i].Given == nil {
 					out[i].Given = map[string][]string{}
 				}
