@@ -111,7 +111,7 @@ func TestUpload(t *testing.T) {
 		t.Errorf("persons: %+v", ps)
 	}
 
-	if code, _, page := b.do("GET", "/batches", nil); code != 200 || !strings.Contains(page, "«билеты»") || !strings.Contains(page, "Я (ЕСБ)") || !strings.Contains(page, "файлов 2") {
+	if code, _, page := b.do("GET", "/batches", nil); code != 200 || !strings.Contains(page, "«билеты»") || !strings.Contains(page, "Я (ЕСБ)") || !strings.Contains(page, "файлов 2") || !strings.Contains(page, "в очереди") {
 		t.Errorf("batches %d: %s", code, page)
 	}
 }

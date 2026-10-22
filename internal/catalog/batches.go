@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path"
+	"slices"
 	"strings"
 	"time"
 )
@@ -313,6 +315,26 @@ type BatchProgress struct {
 	Split       int // cut into documents
 	Documents   int
 	Ready       int // documents with text layers: in search
+	// Kinds of the files not read, by extension (".xlsx", ".md").
+	UnsupportedKinds []string
+}
+
+// Started says whether any work on the batch is done yet.
+func (p BatchProgress) Started() bool { return p.Read+p.Unsupported+p.Failed > 0 }
+
+// Percent is the share of the batch's work done: reading every file,
+// splitting every read one, putting every document in search. Documents
+// appear as files are split, so the share is an estimate until then; it
+// reaches 100 only when the batch is done.
+func (p BatchProgress) Percent() int {
+	if p.Done() {
+		return 100
+	}
+	work := p.Originals + p.Read + p.Documents
+	if work == 0 {
+		return 0
+	}
+	return min(99, 100*(p.Read+p.Unsupported+p.Split+p.Ready)/work)
 }
 
 // Done says whether nothing is left to do for the batch.
@@ -351,5 +373,29 @@ func (c *Catalog) BatchProgresses(ctx context.Context) (map[int64]BatchProgress,
 		p.Read, p.Unsupported, p.Failed, p.Split = int(read.Int64), int(unsup.Int64), int(failed.Int64), int(split.Int64)
 		out[id] = p
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	kinds, err := c.db.QueryContext(ctx, `
+		SELECT DISTINCT bo.batch_id, s.uri FROM batch_originals bo
+		JOIN extraction e ON e.sha256 = bo.sha256 AND e.status = 'unsupported'
+		JOIN sources s ON s.sha256 = bo.sha256`)
+	if err != nil {
+		return nil, fmt.Errorf("batch progress: %w", err)
+	}
+	defer kinds.Close()
+	for kinds.Next() {
+		var id int64
+		var uri string
+		if err := kinds.Scan(&id, &uri); err != nil {
+			return nil, fmt.Errorf("batch progress: %w", err)
+		}
+		p := out[id]
+		if k := strings.ToLower(path.Ext(uri)); k != "" && !slices.Contains(p.UnsupportedKinds, k) {
+			p.UnsupportedKinds = append(p.UnsupportedKinds, k)
+			slices.Sort(p.UnsupportedKinds)
+			out[id] = p
+		}
+	}
+	return out, kinds.Err()
 }

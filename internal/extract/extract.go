@@ -86,16 +86,16 @@ type Reader interface {
 	Read(ctx context.Context, image string) (pages.Reading, error)
 }
 
-// CheckDPI is the resolution pages are rendered at for the second reading,
-// as in the bake-off where tesseract read 96% of printed facts.
-const CheckDPI = 300
+// CheckLongSide is the page image size for the second reading: an A4 page
+// at 300 dpi, as in the bake-off where tesseract read 96% of printed facts.
+const CheckLongSide = 3508
 
 func (s *Stage) renderForCheck(ctx context.Context, pdf string, pageCount int) ([]string, error) {
 	dir, err := os.MkdirTemp("", "librarian-check-")
 	if err != nil {
 		return nil, err
 	}
-	imgs, err := s.Poppler.RenderPNG(ctx, pdf, dir, CheckDPI)
+	imgs, err := s.Poppler.RenderPNG(ctx, pdf, dir, CheckLongSide)
 	if err != nil {
 		os.RemoveAll(dir)
 		return nil, err

@@ -77,11 +77,12 @@ func New(cfg Config) (*Server, error) {
 		"since": dateSourceLabel,
 		"stage": func(s string) string { return stageNames[s] },
 		"usd":   func(f float64) string { return fmt.Sprintf("$%.2f", f) },
-		"pct": func(a, b int) int {
-			if b == 0 {
-				return 0
+		"since_min": func(t time.Time) string {
+			m := int(cfg.Now().Sub(t).Minutes())
+			if m < 1 {
+				return "меньше минуты"
 			}
-			return 100 * a / b
+			return fmt.Sprintf("%d мин", m)
 		},
 	}).ParseFS(files, "templates/*.html")
 	if err != nil {

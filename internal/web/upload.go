@@ -233,9 +233,10 @@ func (s *Server) batches(w http.ResponseWriter, r *http.Request, v viewer) {
 		}
 		rows = append(rows, row)
 	}
-	data := map[string]any{"V": v, "Batches": rows}
+	data := map[string]any{"V": v, "Batches": rows, "Running": false}
 	if s.cfg.Worker != nil {
-		data["W"] = s.cfg.Worker.Status(v.Acc.ID)
+		st := s.cfg.Worker.Status(v.Acc.ID)
+		data["W"], data["Running"] = st, st.State == pipeline.Running
 	}
 	s.render(w, "batches", data)
 }

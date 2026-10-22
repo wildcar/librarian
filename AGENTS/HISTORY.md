@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-22 · Second reading at a fixed size; clearer batch progress
+- What: the tesseract check renders the long side at 3508 px instead of 300 dpi; «Пачки» shows a percent over reading, splitting and search, «готово / в работе / в очереди», and the kinds of files not read.
+- Why: scans whose PDF page claims ~60×85 cm became 70-MP images, ten minutes per page, and the run looked hung; a ✓ beside an empty bar confused the owner.
+- Files: internal/pages/poppler.go, internal/extract/extract.go, internal/catalog/batches.go, internal/web/templates/batches.html
+- Next: read plain text and Markdown files; keep the uploaded file's name.
+
 ## 2026-10-22 · A server folder as a source in the web
 - What: allowed roots per account (`account root add|remove|list`, `Account.Within` resolves links); «Папка» browses them and queues a folder with labels; the worker runs the folder intake (`pipeline.IngestFolder`, now also behind `ingest`) before processing; «Пачки» shows the queue and the last intake.
 - Why: owner wants to add documents already on the server from the browser, without leaving it for the rest of the server.

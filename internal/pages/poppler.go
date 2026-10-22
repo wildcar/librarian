@@ -96,14 +96,17 @@ func (p Poppler) Render(ctx context.Context, pdf, dir string, longSide int) ([]s
 		"-gray", "-jpeg", "-jpegopt", "quality=88", "-scale-to", fmt.Sprint(longSide))
 }
 
-// RenderPNG writes one grayscale PNG per page at dpi: the input for the
-// tesseract second reading, which wants full resolution.
-func (p Poppler) RenderPNG(ctx context.Context, pdf, dir string, dpi int) ([]string, error) {
+// RenderPNG writes one grayscale PNG per page, the long side scaled to
+// longSide pixels: the input for the tesseract second reading, which wants
+// full resolution. A size, not a resolution: a scan whose page claims to be
+// half a metre tall would make a 70-megapixel image at 300 dpi, and tesseract
+// spends ten minutes on it.
+func (p Poppler) RenderPNG(ctx context.Context, pdf, dir string, longSide int) ([]string, error) {
 	bin, err := p.bin("pdftoppm")
 	if err != nil {
 		return nil, err
 	}
-	return p.render(ctx, bin, pdf, dir, "png", "-gray", "-png", "-r", fmt.Sprint(dpi))
+	return p.render(ctx, bin, pdf, dir, "png", "-gray", "-png", "-scale-to", fmt.Sprint(longSide))
 }
 
 func (p Poppler) render(ctx context.Context, bin, pdf, dir, ext string, opts ...string) ([]string, error) {

@@ -37,7 +37,7 @@ func TestTesseractReal(t *testing.T) {
 	if err := os.WriteFile(pdf, minimalPDF("Echocardiography protocol left ventricle normal"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	imgs, err := pop.RenderPNG(context.Background(), pdf, dir, 300)
+	imgs, err := pop.RenderPNG(context.Background(), pdf, dir, 3508)
 	if err != nil || len(imgs) != 1 {
 		t.Fatalf("render: %v %v", imgs, err)
 	}
