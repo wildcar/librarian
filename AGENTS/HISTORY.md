@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-24 · Grouping chips in the document tree
+- What: the three level selects gave way to chips: a pool of keys and a grouping row; drag in, reorder, drag back; the tree reloads at once; a chip is also a link that adds or removes it; no limit of three levels.
+- Why: owner asked for drag-and-drop grouping by the documents' characteristics.
+- Files: internal/web/{web.go,web_test.go}, internal/web/templates/{tree,parts}.html, AGENTS/SPEC.md
+- Next: owner tries it on the phone; `list_inbox` over MCP.
+
 ## 2026-10-23 · add_document over MCP; docs brought up to date
 - What: MCP `add_document` takes a file (base64, ≤20 MB), a text or a cloud link with persons, characteristics, label and the user's words; batches record the assistant and reason (migration 23, shown on «Пачки»); MCP request limit raised; SPEC, README, STATE, MEMORY brought in line with the code.
 - Why: ADR-0004 intake through the assistant; the plan listed done work (model characteristics, persons, MCP skeleton) as next.

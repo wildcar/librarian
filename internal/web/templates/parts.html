@@ -49,7 +49,18 @@ button.small.ghost{border-color:var(--line)}
 button.link{background:none;border:none;color:var(--accent);padding:0;text-decoration:underline}
 .muted{color:var(--muted)}
 .err{color:#b3261e}
-.levels{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.levels{margin-bottom:16px}
+.lvzone{display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-height:44px;padding:6px 8px;border:1px dashed transparent;border-radius:10px}
+#lvrow{border-color:var(--line);background:var(--card);margin-top:6px;counter-reset:lv}
+#lvrow:not(:has(.lv))::after{content:"перетащите сюда характеристику, чтобы сгруппировать по ней";color:var(--muted);font-size:14px}
+.lvzone.over{border-color:var(--accent)}
+.lv{display:inline-flex;gap:6px;align-items:center;background:var(--chip);color:var(--fg);border-radius:8px;padding:4px 10px;font-size:14px;text-decoration:none;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.lv::after{content:"+";color:var(--muted)}
+#lvrow .lv{border:1px solid var(--accent)}
+#lvrow .lv::before{counter-increment:lv;content:counter(lv);color:var(--muted);font-size:12px}
+#lvrow .lv::after{content:"×"}
+.lv.dragging{opacity:.35}
+.lv.ghost{position:fixed;z-index:10;pointer-events:none;cursor:grabbing;box-shadow:0 4px 12px rgba(0,0,0,.2)}
 details{margin:2px 0}
 details>summary{cursor:pointer;padding:4px 0}
 details details{margin-left:18px}

@@ -226,6 +226,14 @@ func TestLoginTreeAndIsolation(t *testing.T) {
 			t.Errorf("tree %d: %s", code, page)
 		}
 	}
+	// Each chosen chip links to the grouping without it, so a click removes it.
+	if _, _, page := desk.do("GET", "/", nil); !strings.Contains(page, `href="/?by=year" data-v="person"`) ||
+		!strings.Contains(page, `href="/?by=person" data-v="year"`) {
+		t.Errorf("default grouping chips: %s", page)
+	}
+	if _, _, page := desk.do("GET", "/?by=", nil); !strings.Contains(page, `href="/?by=person" data-v="person"`) {
+		t.Errorf("empty grouping: %s", page)
+	}
 	code, _, page := desk.do("GET", "/doc/"+ours, nil)
 	if code != 200 || !strings.Contains(page, "Суть: Пациент") || !strings.Contains(page, "02.04.2022") || !strings.Contains(page, "— /in/") {
 		t.Errorf("document %d: %s", code, page)

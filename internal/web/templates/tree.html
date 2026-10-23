@@ -1,17 +1,18 @@
 {{template "head" "Документы"}}{{template "bar" .V}}
 <main>
 <h1>Документы <span class="count">{{.Root.Count}}</span></h1>
-<form class="levels" method="get" action="/">
-<span class="muted">Группировать:</span>
-{{range $i, $c := .Chosen}}{{if $i}}<span class="muted">›</span>{{end}}<select name="by" aria-label="уровень {{$i}}">
-<option value="">—</option>
-{{range $.Options}}<option value="{{.Value}}"{{if eq .Value $c}} selected{{end}}>{{.Label}}</option>{{end}}
-</select>{{end}}
-<button>Показать</button>
-</form>
+<div class="levels">
+<div class="lvzone" id="lvpool"><span class="muted">Характеристики:</span>
+{{range .Pool}}<a class="lv" href="{{.Href}}" data-v="{{.Value}}" title="Перетащите в строку группировки или нажмите">{{.Label}}</a>
+{{end}}</div>
+<div class="lvzone" id="lvrow"><span class="muted">Группировать:</span>
+{{range .Chosen}}<a class="lv" href="{{.Href}}" data-v="{{.Value}}" title="Перетащите, чтобы поменять порядок, или нажмите, чтобы убрать">{{.Label}}</a>
+{{end}}</div>
+</div>
 {{template "node" .Root}}
 </main>
 {{template "keep" "Документы"}}
+{{template "levels"}}
 {{template "foot"}}
 
 {{define "node"}}{{range .Nodes}}<details data-k="{{.Label}}"{{if .None}} class="none"{{end}}><summary>{{.Label}} <span class="count">{{.Count}}</span></summary>
@@ -20,3 +21,43 @@
 {{range .Docs}}<li><span class="d">{{date .Date .Partial}}</span><span><a href="/doc/{{.ID}}">{{if .Title}}{{.Title}}{{else}}{{title .Summary}}{{end}}</a>
 {{range $k, $vs := .Given}}{{range $vs}}<span class="chip">{{$k}}: {{.}}</span>{{end}}{{end}}</span></li>
 {{end}}</ul>{{end}}{{end}}
+
+{{define "levels"}}<script>
+// Grouping chips: drag one from the pool into the row, along the row to
+// reorder, back to the pool to drop it; the tree reloads grouped by the row.
+// A click without dragging follows the chip's link (add or remove).
+(function(){
+var pool=document.getElementById('lvpool'),row=document.getElementById('lvrow');
+function order(){return Array.prototype.map.call(row.querySelectorAll('.lv'),function(c){return c.dataset.v})}
+var start=order(),drag=null;
+function place(zone,x,y){
+var cs=zone.querySelectorAll('.lv:not(.dragging)');
+for(var i=0;i<cs.length;i++){var r=cs[i].getBoundingClientRect();
+if(y<r.top||(y<=r.bottom&&x<r.left+r.width/2)){zone.insertBefore(drag.el,cs[i]);return}}
+zone.appendChild(drag.el)}
+// Moves and the drop are followed on the document: moving the chip in the
+// page would release a pointer capture on it.
+document.querySelectorAll('.lv').forEach(function(c){
+c.addEventListener('pointerdown',function(e){if(!e.button)drag={el:c,x:e.clientX,y:e.clientY,on:false}});
+c.addEventListener('dragstart',function(e){e.preventDefault()})});
+document.addEventListener('pointermove',function(e){
+if(!drag)return;var c=drag.el;
+if(!drag.on){if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)<6)return;
+drag.on=true;var r=c.getBoundingClientRect();drag.dx=drag.x-r.left;drag.dy=drag.y-r.top;
+drag.ghost=c.cloneNode(true);drag.ghost.className='lv ghost';document.body.appendChild(drag.ghost);c.classList.add('dragging')}
+e.preventDefault();
+drag.ghost.style.left=(e.clientX-drag.dx)+'px';drag.ghost.style.top=(e.clientY-drag.dy)+'px';
+var under=document.elementFromPoint(e.clientX,e.clientY),zone=under&&under.closest('.lvzone');
+pool.classList.toggle('over',zone===pool);row.classList.toggle('over',zone===row);
+if(zone)place(zone,e.clientX,e.clientY)});
+var dragged=false;
+document.addEventListener('click',function(e){if(dragged&&e.target.closest('.lv'))e.preventDefault()},true);
+function end(){
+if(!drag)return;var d=drag;drag=null;if(!d.on)return;
+d.ghost.remove();d.el.classList.remove('dragging');pool.classList.remove('over');row.classList.remove('over');
+dragged=true;setTimeout(function(){dragged=false},0);
+var now=order();if(now.join('\u0001')===start.join('\u0001'))return;
+location.assign(now.length?'/?'+now.map(function(v){return 'by='+encodeURIComponent(v)}).join('&'):'/?by=')}
+document.addEventListener('pointerup',end);document.addEventListener('pointercancel',end);
+})();
+</script>{{end}}

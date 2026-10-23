@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -390,8 +391,11 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 // --- documents ---------------------------------------------------------------
 
-type levelOption struct {
-	Value, Label string
+// levelChip is a characteristic the tree can be grouped by; Href applies the
+// grouping with it added (from the pool) or taken out (from the row), so the
+// chips work as plain links without scripts too.
+type levelChip struct {
+	Value, Label, Href string
 }
 
 func (s *Server) tree(w http.ResponseWriter, r *http.Request, v viewer) {
@@ -409,7 +413,7 @@ func (s *Server) tree(w http.ResponseWriter, r *http.Request, v viewer) {
 	for _, p := range persons {
 		labels[p.Code] = p.Label
 	}
-	options := []levelOption{{LevelPerson, "Человек"}, {LevelYear, "Год"}}
+	options := []levelChip{{Value: LevelPerson, Label: "Человек"}, {Value: LevelYear, Label: "Год"}}
 	keys := map[string]bool{}
 	for _, d := range docs {
 		for k := range d.Attrs {
@@ -422,7 +426,7 @@ func (s *Server) tree(w http.ResponseWriter, r *http.Request, v viewer) {
 	}
 	sort.Strings(sorted)
 	for _, k := range sorted {
-		options = append(options, levelOption{k, k})
+		options = append(options, levelChip{Value: k, Label: k})
 	}
 
 	levels := []string{}
@@ -433,13 +437,34 @@ func (s *Server) tree(w http.ResponseWriter, r *http.Request, v viewer) {
 		}
 	}
 	if _, asked := r.URL.Query()["by"]; !asked {
-		levels = []string{LevelPerson, LevelYear}
+		levels, seen = []string{LevelPerson, LevelYear}, map[string]bool{LevelPerson: true, LevelYear: true}
 	}
-	chosen := make([]string, 3)
-	copy(chosen, levels)
+	byValue := map[string]levelChip{}
+	var pool, chosen []levelChip
+	for _, o := range options {
+		byValue[o.Value] = o
+		if !seen[o.Value] {
+			o.Href = levelsHref(append(slices.Clone(levels), o.Value))
+			pool = append(pool, o)
+		}
+	}
+	for _, l := range levels {
+		c := byValue[l]
+		c.Href = levelsHref(slices.DeleteFunc(slices.Clone(levels), func(x string) bool { return x == l }))
+		chosen = append(chosen, c)
+	}
 	s.render(w, "tree", map[string]any{
-		"V": v, "Root": Build(docs, levels, labels), "Options": options, "Chosen": chosen,
+		"V": v, "Root": Build(docs, levels, labels), "Pool": pool, "Chosen": chosen,
 	})
+}
+
+// levelsHref is the tree grouped by the levels; an empty "by" keeps an empty
+// grouping from falling back to the default.
+func levelsHref(levels []string) string {
+	if len(levels) == 0 {
+		return "/?by="
+	}
+	return "/?" + url.Values{"by": levels}.Encode()
 }
 
 type docPage struct {
