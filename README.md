@@ -8,7 +8,7 @@ them (rules first, AI models through
 win). Users work with their archive through an MCP server, from any AI assistant.
 Accounts are isolated from each other.
 
-Status: early draft, see `AGENTS/SPEC.md`.
+Status: running at `https://lib.wildcar.ru` (web interface and MCP at `/mcp`); see `AGENTS/SPEC.md`.
 
 ## Run locally
 
@@ -29,7 +29,9 @@ go run ./cmd/librarian verify  --account family   # tesseract second reading for
 go run ./cmd/librarian split   --account family   # cut originals into documents
 go run ./cmd/librarian docs    --account family
 go run ./cmd/librarian digest  --account family   # essential text + de-identified summary
+go run ./cmd/librarian date    --account family   # creation dates
 go run ./cmd/librarian show    --account family <document id> [--layer essential]
+go run ./cmd/librarian run     --account family   # every stage above in order, for new files
 
 # persons, index and the MCP server for assistants
 go run ./cmd/librarian person add --account family --code ИПС --label Папа --name "Иванов Петр Сергеевич" --alias "Иванов П.С." --birth 1950-02-01
@@ -37,6 +39,11 @@ go run ./cmd/librarian index  --account family
 go run ./cmd/librarian token create --account family    # shown once
 go run ./cmd/librarian serve  --addr 127.0.0.1:8090     # MCP at http://127.0.0.1:8090/mcp, Authorization: Bearer <token>
 ```
+
+`serve` also serves the web interface on every other path and, with `ROUTER_URL` and
+`ROUTER_TOKEN` set, processes new files in the background (uploads, server folders,
+cloud links, files an assistant sends with `add_document`). Web login is by a letter:
+`librarian account email <account> <e-mail>` binds an address; settings in `deploy/README.md`.
 
 ## Docs
 

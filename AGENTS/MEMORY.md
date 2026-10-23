@@ -17,7 +17,7 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - The product is a multi-account service: an account (user) keeps documents of several persons, accounts are isolated, input is an irregular stream, output is an MCP server for any AI assistant (user, 2026-10-19, ADR-0004). Supersedes the 2026-10-18 note that access control was not needed.
 - All scanned pages, medical ones included, may be sent to vision models through the router (user, 2026-10-18). Why: reading quality on handwriting matters more than keeping scans local; recorded in ADR-0002.
 - Router calls carry `external_user_id="librarian:<account_id>"` in the service (user, 2026-10-19; earlier just `librarian`). Why: spend per account in the router console and `get_usage`; the field does not affect access.
-- Connecting an assistant must stay simple: MCP address + account token; OAuth later (user, 2026-10-19).
+- Connecting an assistant must stay simple: MCP address + account token (user, 2026-10-19); OAuth by a letter added since (ADR-0007), the token still works.
 - Persons are never shared between accounts; sharing is export from one account and import into another (user, 2026-10-19). Why: shared ownership is too fragile.
 - Originals are only for verification against the primary source; analysis uses the essential text, most requests the de-identified summary without patient, doctor or clinic (user, 2026-10-19, ADR-0005).
 - The library is general-purpose: medicine is the first example; tickets, car insurance, contracts, notes and appliance manuals follow (user, 2026-10-21). Why: no domain schemas (lab trends, medication history, referral chains) in the core; the librarian extracts as much as each document gives.
@@ -26,6 +26,7 @@ MEMORY.md = durable facts/agreements; current state -> STATE.md; iteration log -
 - The document date is its creation date (a referral written on 12 Sept for 8 Oct is dated 12 Sept) and is the most important date; every dated document must get it. Upload date is secondary, for recalling batches (user, 2026-10-21).
 - An assistant may refine documents over MCP, but its changes stay marked as the assistant's until the owner confirms them, and it cannot override the owner's manual facts (user, 2026-10-21).
 - A doctor's specialty belongs in the summary: it is not personal data (user, 2026-10-21).
+- Talk to the owner in Russian, the end-of-turn recap included; repository docs stay in English (user, 2026-10-23).
 - Deploy to `homesrv` right after each change is committed (build, install, restart, check `/health`; `deploy/README.md`), without asking (user, 2026-10-22). Why: the owner checks every change live.
 
 ## Project facts

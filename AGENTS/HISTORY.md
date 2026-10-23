@@ -4,6 +4,12 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 
 ---
 
+## 2026-10-23 · add_document over MCP; docs brought up to date
+- What: MCP `add_document` takes a file (base64, ≤20 MB), a text or a cloud link with persons, characteristics, label and the user's words; batches record the assistant and reason (migration 23, shown on «Пачки»); MCP request limit raised; SPEC, README, STATE, MEMORY brought in line with the code.
+- Why: ADR-0004 intake through the assistant; the plan listed done work (model characteristics, persons, MCP skeleton) as next.
+- Files: internal/mcpserver/{add,add_test,server}.go, internal/catalog/{batches,catalog}.go, internal/pipeline/folder.go, internal/web/templates/batches.html, cmd/librarian/main.go, AGENTS/*, README.md
+- Next: a real assistant saves a document; `list_inbox` over MCP.
+
 ## 2026-10-23 · Russian in old Word files
 - What: `.doc` text that comes out of catdoc as cp1252 mojibake (no Cyrillic, mostly À–ÿ) is read again with `-s cp1251`; catdoc's «fast-saved» note is dropped; migration 22 re-reads old .doc files and remakes their layers and dates.
 - Why: owner's Word 95 file showed «Êàôåäðà ÝÂÌ» in the essential text on the document page.

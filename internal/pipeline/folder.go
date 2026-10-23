@@ -16,6 +16,8 @@ type Labels struct {
 	New     *catalog.Person // created before the batch; its code joins Persons
 	Attrs   []catalog.Attr
 	Label   string
+	Actor   string // the assistant that sent the intake over MCP
+	Reason  string // the user's words it passed on
 }
 
 func (l Labels) labelled() bool { return len(l.Persons) > 0 || l.New != nil || len(l.Attrs) > 0 }
@@ -60,7 +62,8 @@ func makeBatch(ctx context.Context, c *catalog.Catalog, kind, root string, l Lab
 		}
 		persons = append(persons, l.New.Code)
 	}
-	b := catalog.Batch{Kind: kind, Root: root, Label: l.Label, Persons: persons, Attrs: l.Attrs, Originals: len(originals)}
+	b := catalog.Batch{Kind: kind, Root: root, Label: l.Label, Persons: persons, Attrs: l.Attrs,
+		Actor: l.Actor, Reason: l.Reason, Originals: len(originals)}
 	var err error
 	if b.ID, err = c.CreateBatch(ctx, b, originals, now); err != nil {
 		return catalog.Batch{}, nil, err

@@ -48,7 +48,12 @@ title — короткое название документа для списк
 update_document меняет документ: вызывай его, только когда пользователь сам сказал, что исправить
 («это мамин документ», «дата — 12 сентября»), а не по своей догадке, и передай в reason его слова.
 Правка видна как правка ассистента, пока владелец её не подтвердит; то, что владелец задал вручную,
-ассистент изменить не может.`
+ассистент изменить не может.
+add_document кладёт в библиотеку новый документ, когда пользователь просит его сохранить: файл
+(content в base64 и name с расширением, до 20 МБ), текст (text) или публичную ссылку на файл или
+папку Яндекс Диска, Nextcloud или Google Drive (link; так же и для файлов больше 20 МБ). persons и
+attrs — только то, что сказал пользователь; не знаешь, чей документ, — не указывай, библиотека найдёт
+имя в тексте. reason — его слова. Документ появится в поиске через несколько минут (batch — номер пачки).`
 
 // Server serves the MCP endpoint for every account under one data root.
 type Server struct {
@@ -59,6 +64,7 @@ type Server struct {
 	servers  map[string]*mcp.Server
 
 	web         http.Handler
+	intake      Intake
 	oauth       OAuth
 	metadataURL string
 }
@@ -140,7 +146,9 @@ func (s *Server) Handler() http.Handler {
 			return nil
 		}
 		return srv
-	}, &mcp.StreamableHTTPOptions{Stateless: true})
+	}, &mcp.StreamableHTTPOptions{Stateless: true,
+		// add_document carries a file of up to MaxAddBytes as base64.
+		MaxRequestBodyBytes: MaxAddBytes*4/3 + 1<<20})
 	protected := auth.RequireBearerToken(s.verify, &auth.RequireBearerTokenOptions{ResourceMetadataURL: s.metadataURL})(mcpHandler)
 
 	mux := http.NewServeMux()
@@ -178,7 +186,7 @@ func (s *Server) forAccount(a *account.Account) (*mcp.Server, error) {
 	}
 	srv := mcp.NewServer(&mcp.Implementation{Name: "librarian", Version: "0"},
 		&mcp.ServerOptions{Instructions: Instructions})
-	t := &tools{cat: c}
+	t := &tools{cat: c, acc: a, intake: s.intake}
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_persons",
 		Description: "Люди, чьи документы хранит аккаунт: код, метка и число документов. Полных имён нет."}, t.listPersons)
 	mcp.AddTool(srv, &mcp.Tool{Name: "search_documents",
@@ -187,6 +195,8 @@ func (s *Server) forAccount(a *account.Account) (*mcp.Server, error) {
 		Description: "Уточнить документ со слов пользователя: человек, характеристики, дата. Правка помечается как правка ассистента до подтверждения владельцем."}, t.update)
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_document",
 		Description: "Документ по id: резюме (по умолчанию), суть (essential) или дословный текст (verbatim)."}, t.get)
+	mcp.AddTool(srv, &mcp.Tool{Name: "add_document",
+		Description: "Положить в библиотеку файл (content в base64 с name), текст (text) или публичную облачную ссылку (link), когда пользователь просит сохранить документ. Обработка идёт в фоне, документы появляются в поиске через несколько минут."}, t.add)
 	s.servers[a.ID] = srv
 	return srv, nil
 }
@@ -210,7 +220,11 @@ func (s *Server) catalog(a *account.Account) (*catalog.Catalog, error) {
 	return c, nil
 }
 
-type tools struct{ cat *catalog.Catalog }
+type tools struct {
+	cat    *catalog.Catalog
+	acc    *account.Account
+	intake Intake // nil when the service does not process in the background
+}
 
 // assistantOf names the assistant behind a call: the OAuth client, or the
 // account token when the call came with one.

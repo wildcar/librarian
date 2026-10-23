@@ -19,8 +19,10 @@ type Batch struct {
 	Created   time.Time
 	Persons   []string
 	Attrs     []Attr
-	Originals int // filled by Batches
-	Documents int // filled by Batches
+	Actor     string // the assistant that sent it over MCP; '' for the owner
+	Reason    string // the user's words the assistant passed on
+	Originals int    // filled by Batches
+	Documents int    // filled by Batches
 }
 
 // Attr is one characteristic: a key and one of its values.
@@ -55,8 +57,8 @@ func (c *Catalog) CreateBatch(ctx context.Context, b Batch, originals []string, 
 		return 0, err
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, "INSERT INTO batches (kind, root, label, created) VALUES (?, ?, ?, ?)",
-		b.Kind, b.Root, b.Label, at.UTC().Format(time.RFC3339Nano))
+	res, err := tx.ExecContext(ctx, "INSERT INTO batches (kind, root, label, actor, reason, created) VALUES (?, ?, ?, ?, ?, ?)",
+		b.Kind, b.Root, b.Label, b.Actor, b.Reason, at.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return 0, fmt.Errorf("create batch: %w", err)
 	}
@@ -147,7 +149,7 @@ func setBatchPersons(ctx context.Context, tx *sql.Tx, id int64, codes []string) 
 // Batches lists the account's batches, newest first, with what they hold.
 func (c *Catalog) Batches(ctx context.Context) ([]Batch, error) {
 	rows, err := c.db.QueryContext(ctx, `
-		SELECT b.id, b.kind, COALESCE(b.root, ''), COALESCE(b.label, ''), b.created,
+		SELECT b.id, b.kind, COALESCE(b.root, ''), COALESCE(b.label, ''), COALESCE(b.actor, ''), COALESCE(b.reason, ''), b.created,
 		  (SELECT COUNT(*) FROM batch_originals bo WHERE bo.batch_id = b.id),
 		  (SELECT COUNT(*) FROM documents d JOIN batch_originals bo ON bo.sha256 = d.sha256 WHERE bo.batch_id = b.id)
 		FROM batches b ORDER BY b.id DESC`)
@@ -158,7 +160,7 @@ func (c *Catalog) Batches(ctx context.Context) ([]Batch, error) {
 	for rows.Next() {
 		var b Batch
 		var created string
-		if err := rows.Scan(&b.ID, &b.Kind, &b.Root, &b.Label, &created, &b.Originals, &b.Documents); err != nil {
+		if err := rows.Scan(&b.ID, &b.Kind, &b.Root, &b.Label, &b.Actor, &b.Reason, &created, &b.Originals, &b.Documents); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("batches: %w", err)
 		}

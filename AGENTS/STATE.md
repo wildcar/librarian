@@ -12,42 +12,22 @@ an MCP server from any AI assistant.
 
 ## Now
 
-- Word and Excel are read as text (.docx/.xlsx in Go, .doc by catdoc, .xls by python3-xlrd, both installed on homesrv); files set aside before are read again (migration 21). A real Word 95 .doc read live; its Russian came out as cp1252, so such text is read again as cp1251 and old .doc files get new layers (migration 22).
-- Cloud links on «Загрузить»: Yandex Disk, Nextcloud, Google Drive (files, Docs as PDF, folders through the embedded view); files are downloaded into the account and become a `link` batch. One real link downloaded fine (owner, 2026-10-23); not every service tried yet.
-- Document page opens the original («Открыть файл» next to each file, PDF at the document's page, served only while the hash matches); «Входящие» lists documents without a person and every open check, by kind; splits, doubted pages and assistant edits are settled there by buttons (catalog migration 19). Persons (also a new one), date and characteristics are edited on the document page; a flagged summary is accepted or made again (migration 20). Every inbox reason can now be closed from the web. Owner checked the first part live 2026-10-22; the buttons deployed 2026-10-22.
-- Server folders through the web (`/folder`): only inside the account's allowed roots; none set yet for `sergey`, and `librarian` may only traverse `/mnt/raid/document/Сережа`.
-- Uploads through the web (`/upload`, ADR-0007): files become a labelled batch, the worker in `serve` takes them to search (auto up to $1 OCR estimate, else «Обработать» on `/batches`); `librarian run` does the same from the CLI. Checked live on a throwaway account.
-- Assistants connect to `https://lib.wildcar.ru/mcp` by OAuth (ADR-0007): the letter names the assistant, «Ассистенты» lists and disconnects them, edits are signed with the assistant's name; checked live up to the authorization page, a real assistant not connected yet.
-- Web interface live at `https://lib.wildcar.ru` (ADR-0007): login by a letter (`wildcar@mail.ru` → `sergey`), the tree with chosen levels, the document page. Letters leave the local Postfix; without SPF/DKIM and PTR Gmail will refuse them, mail.ru took them before.
-- MCP `update_document`: an assistant refines persons, characteristics and date with the user's words as reason; marked until `librarian doc confirm | revert`.
-- Manual refinement per document: `librarian doc set | show` (person, characteristics, date), kept by index over batches, rules and models.
-- Batches (ADR-0006): the sample folder is batch 1, labelled ЕБВ — all 68 documents linked (60 by name before); characteristics per batch, searchable through MCP.
-- Document date is the creation date (`librarian date`, run after `digest`, before `index`): on the sample 64 of 68 confirmed by a quote, 2 without one, 2 rejected and dated from the summary; `date_partial` for dates without a day or year; $0.008.
-- An assistant worked through `lib.wildcar.ru` (2026-10-21); its feedback led to paging and absence search: `search_documents` returns `total`/`next_offset`, lists all without words, `missing: [date|person]`; `review` lists kinds of open checks.
-- Service live at `https://lib.wildcar.ru/mcp` (systemd + Apache + Let's Encrypt, files in `deploy/`); checked over HTTPS: initialize, tools/list, list_persons, search, wrong token 401.
-- Ubuntu server `homesrv` is dev and prod (toolchain, user `librarian`, `/var/lib/librarian`, env files). Sample run there (account `sergey`, from Nextcloud): 156 pages OCR $1.38, 1 flagged page; 68 documents, split $0.23, 0 reviews; digest $0.063, 1 flagged summary; 60 of 68 linked to the person.
-- By name alone 60 of 68 linked: 4 forms with misread handwritten initials, 1 misspelt surname, 3 without a name; the batch label links them all.
-- Fifth Go slice done: persons, `index`, tokens, `librarian serve` with list_persons / search_documents / get_document; checked with a real MCP client; 61 of 69 sample documents linked to ЕБВ.
-- Fourth Go slice done: `librarian digest` / `show`; sample: 69 documents, 0 leaks, 1 flagged summary (a computed «28 дней»), $0.045.
-- Third Go slice done: `librarian split` / `docs`; sample: 69 documents, 100% against hand labels, $0.24; two rules made weak after calibration.
-- Tesseract second reading in the Go pipeline (ADR-0002): `extract` checks new OCR pages, `verify` backfills; 156 sample pages checked, 0 flagged (lowest share 0.92, longest missing run 1).
-- Second Go slice done: `librarian extract` — text layer or OCR (Gemini 4 Argon via router) per page, stored in the account catalog. Sample account: 156 pages OCR'd for $1.39 in 10 min, 0 errors; facts score 98% vs 99% in the bench (the difference is one rotated handwritten page).
-- First Go slice done: `librarian account create | ingest | dupes | stats`; per-account SQLite catalog; tested (unit + end-to-end on the sample folder).
-- OCR bake-off done on 14 sample pages (`tools/ocrbench/`, ADR-0002 Accepted): tesseract 78% (9% on handwriting), Gemini 3.1 Flash Lite 93%.
-- Report, reference facts and all engine outputs: `library/_эксперименты/ocr-2026-10/` (outside the repo, personal data).
-- Tesseract text of all 156 sample pages is cached there for the splitting experiment.
-- Round 2 (2026-10-19, 12 newer models): Gemini 4 Argon 99%, handwriting 94%, $0.0097/page — now the primary OCR model (ADR-0002).
-- Service shape settled: ADR-0004 (accounts, persons, stream intake, MCP output; open questions resolved) and ADR-0005 (text layers, de-identified summaries by default).
-- Layers experiment done (`tools/ocrbench/layers.py`, 68 documents): GPT-6 Luna and Gemini 4 Argon lost no facts and leaked nothing; Luna chosen ($0.001 per document). Report: `library/_эксперименты/layers-2026-10/`.
-- Splitting experiment done (`tools/ocrbench/split.py`, ADR-0003 Accepted): Argon over the whole file 100%/100% on 27 files, also without handwritten dates; rules 93%/75% without them, decide weak. Report and proposed split of the folder: `library/_эксперименты/split-2026-10/`.
+- Live at `https://lib.wildcar.ru` on `homesrv` (dev and prod): web interface and MCP at `/mcp`; deployed after every change (`deploy/README.md`).
+- MCP tools: `list_persons`, `search_documents` (paging, `missing`, `attrs`, `batch`), `get_document` (summary, essential, verbatim), `update_document` (assistant edits, marked until the owner accepts), `add_document` (new 2026-10-23: a file in base64, a text or a cloud link; batch records the assistant and the user's words; not yet tried by a real assistant).
+- Assistants connect by OAuth with a letter (ADR-0007) or the account token; one assistant worked through the service 2026-10-21.
+- Web: login by a letter, document tree with chosen levels, document page with edits and «Открыть файл», «Входящие» where every check can be closed, «Загрузить» (files, cloud links), «Папка» (server folders inside allowed roots; none set for `sergey`), «Пачки», «Ассистенты».
+- Intake: folders, uploads, cloud links (Yandex Disk, Nextcloud, Google Drive; one real link worked 2026-10-23), MCP. Formats: PDF, images, plain text, .docx/.xlsx, .doc (cp1251 Word 95 fixed 2026-10-23, migration 22), .xls.
+- Pipeline (the worker in `serve`, or `librarian run`): extract (text layer or Gemini 4 Argon OCR + tesseract check) → split → digest (essential text, de-identified summary by GPT-6 Luna) → date → describe (title, вид / специальность / организация as `source = model`, guesses marked) → index.
+- Account `sergey`: the sample folder (68 documents, batch 1 «ЕБВ») plus the owner's uploads; persons ЕБВ (Папа) and ЕСБ (Я).
+- Mail: SPF, DKIM, DMARC published; mail.ru and Gmail accept; other domains get mail from 95.165.109.250 without PTR (ENV.md).
 
 ## Next
 
-- Mail: only letters to domains other than mail.ru and Gmail still leave from 95.165.109.250 without PTR (ENV.md).
-- Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
-- `add_document` over MCP.
-- Try cloud links on real shares of the other services; `list_inbox` over MCP; ODT/ODS, RTF, archives.
-- Persons within an account (code, aliases, birth date) — needed to resolve names in documents.
+- Owner: ask an assistant to save a document through `add_document`; try cloud links of the other services.
+- `list_inbox` / `resolve_inbox` over MCP.
+- ODT/ODS, RTF, archives.
+- Resolve names read from documents against persons more cleverly (SPEC 9); namesakes.
+- `get_file` over MCP; export / import of a person (SPEC 2a).
 
 ## Open questions
 
@@ -62,5 +42,6 @@ an MCP server from any AI assistant.
 - Date sanity: device clocks (an ECG dated 1970), dates before the person's birth.
 - Flagged pages of originals not yet split into documents are only in `stats`, not in «Входящие».
 - `extract` processes originals one after another, pages in parallel; parallelism across originals if volume needs it.
-- Go tests and linter beyond `go vet` / `gofmt`: no Go logic yet. `tools/ocrbench` has no tests (throwaway harness).
+- No linter beyond `go vet` / `gofmt`; `tools/ocrbench` has no tests (throwaway harness).
 - Router provider `codex-oauth` disabled; GPT models via codex subscription not benchmarked.
+- `РАЗБИВКА.md` (hand split of the sample, outside the repo) needs no separate review: disputed splits are settled in «Входящие».

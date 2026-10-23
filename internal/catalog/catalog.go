@@ -262,6 +262,10 @@ var schema = []string{
 		JOIN originals o ON o.sha256 = d.sha256 WHERE o.mime = 'application/msword');
 	DELETE FROM doc_dates WHERE doc_id IN (SELECT d.id FROM documents d
 		JOIN originals o ON o.sha256 = d.sha256 WHERE o.mime = 'application/msword');`,
+	// 23: an assistant sends files and links over MCP (add_document): the
+	// batch keeps which assistant and the user's words.
+	`ALTER TABLE batches ADD COLUMN actor TEXT;
+	ALTER TABLE batches ADD COLUMN reason TEXT;`,
 }
 
 // Catalog is an open account catalog.

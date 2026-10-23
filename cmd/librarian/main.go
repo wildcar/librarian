@@ -492,6 +492,7 @@ func serve(ctx context.Context, home, addr string, out io.Writer) error {
 		}
 		worker = &pipeline.Worker{Home: home, Tools: tools, Catalog: s.Catalog, LimitUSD: limit, Every: time.Hour, Log: out}
 		go worker.Start(ctx)
+		s.SetIntake(worker)
 		fmt.Fprintf(out, "Фоновая обработка: без разрешения до $%.2f за запуск\n", limit)
 	}
 	w, err := web.New(web.Config{Registry: reg, Mail: sender, Public: public, Catalog: s.Catalog, Log: out,
