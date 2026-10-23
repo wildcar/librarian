@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Word and Excel files of the old binary format: .doc by catdoc, .xls by
@@ -34,13 +36,41 @@ func runCatdoc(name string, args ...string) (string, error) {
 	return out.String(), nil
 }
 
-// ReadDOC returns an old Word document's text.
+// ReadDOC returns an old Word document's text. Word 6 and 95 keep text in
+// the code page of the Windows that wrote it, and catdoc takes it for
+// cp1252: Russian comes out as «Êàôåäðà». Such text is read again as cp1251.
 func ReadDOC(file string) ([]string, error) {
 	t, err := runCatdoc("catdoc", "-d", "utf-8", "-w", file)
 	if err != nil {
 		return nil, err
 	}
-	return pagesOf(t, "doc")
+	if misread1251(t) {
+		if t, err = runCatdoc("catdoc", "-s", "cp1251", "-d", "utf-8", "-w", file); err != nil {
+			return nil, err
+		}
+	}
+	return pagesOf(fastSaved.ReplaceAllString(t, ""), "doc")
+}
+
+// fastSaved is catdoc's own note on a fast-saved file, not the document's text.
+var fastSaved = regexp.MustCompile(`(?m)^\[This was fast-saved +\d+ times\. Some information is lost\]\n?`)
+
+// misread1251 tells cp1251 text decoded as cp1252: letters of À–ÿ make most
+// of the letters and there is no Cyrillic at all.
+func misread1251(t string) bool {
+	var latin1, letters int
+	for _, r := range t {
+		switch {
+		case r >= 0x400 && r <= 0x4FF:
+			return false
+		case r >= 0xC0 && r <= 0xFF && r != 0xD7 && r != 0xF7:
+			latin1++
+			letters++
+		case unicode.IsLetter(r):
+			letters++
+		}
+	}
+	return latin1 > 0 && latin1*2 >= letters
 }
 
 // xlsScript prints a workbook for ReadXLS: a sheet's name, then its rows,

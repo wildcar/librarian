@@ -110,3 +110,19 @@ func TestOfficeTypesAreRead(t *testing.T) {
 		t.Error(DOCX)
 	}
 }
+
+func TestMisread1251(t *testing.T) {
+	for s, want := range map[string]bool{
+		"Êàôåäðà ÝÂÌ\nÓ÷åáíî-èññëåäîâàòåëüñêàÿ ðàáîòà": true,
+		"Кафедра ЭВМ, Ó÷åáíî":                          false,
+		"Café crème brûlée for the résumé":             false,
+		"RGB filter 1998":                              false,
+	} {
+		if got := misread1251(s); got != want {
+			t.Errorf("%q: %v", s, got)
+		}
+	}
+	if got := fastSaved.ReplaceAllString("[This was fast-saved  1 times. Some information is lost]\nТекст", ""); got != "Текст" {
+		t.Errorf("%q", got)
+	}
+}

@@ -255,6 +255,13 @@ var schema = []string{
 		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 		'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 		'application/msword', 'application/vnd.ms-excel'));`,
+	// 22: Russian in Word 6 and 95 files was read as cp1252: old .doc files
+	// are read again, their documents get new text layers and dates.
+	`DELETE FROM extraction WHERE sha256 IN (SELECT sha256 FROM originals WHERE mime = 'application/msword');
+	UPDATE texts SET redo = 1 WHERE doc_id IN (SELECT d.id FROM documents d
+		JOIN originals o ON o.sha256 = d.sha256 WHERE o.mime = 'application/msword');
+	DELETE FROM doc_dates WHERE doc_id IN (SELECT d.id FROM documents d
+		JOIN originals o ON o.sha256 = d.sha256 WHERE o.mime = 'application/msword');`,
 }
 
 // Catalog is an open account catalog.
