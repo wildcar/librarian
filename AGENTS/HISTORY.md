@@ -8,7 +8,7 @@ Newest first. Each entry ≤5 lines using the format defined in `AGENTS.md`.
 - What: `.doc` text that comes out of catdoc as cp1252 mojibake (no Cyrillic, mostly À–ÿ) is read again with `-s cp1251`; catdoc's «fast-saved» note is dropped; migration 22 re-reads old .doc files and remakes their layers and dates.
 - Why: owner's Word 95 file showed «Êàôåäðà ÝÂÌ» in the essential text on the document page.
 - Files: internal/pages/{legacy,office_test}.go, internal/catalog/catalog.go
-- Next: owner checks the document page; characteristics read by a model.
+- Next: owner checks the document page; `add_document` over MCP.
 
 ## 2026-10-22 · Router calls name lib.wildcar.ru
 - What: `chat` calls carry `app_url` from `LIBRARIAN_PUBLIC_URL`; every CLI and worker connection goes through `dialRouter`.

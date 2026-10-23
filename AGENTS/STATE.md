@@ -44,7 +44,6 @@ an MCP server from any AI assistant.
 ## Next
 
 - Mail: only letters to domains other than mail.ru and Gmail still leave from 95.165.109.250 without PTR (ENV.md).
-- Characteristics read from documents by a model (kind of document, specialty, organisation kind), `source = model`, same table as batch characteristics.
 - Owner: review `РАЗБИВКА.md` (68 documents) when convenient; corrections update the hand labels.
 - `add_document` over MCP.
 - Try cloud links on real shares of the other services; `list_inbox` over MCP; ODT/ODS, RTF, archives.
